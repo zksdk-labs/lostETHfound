@@ -17,7 +17,7 @@ export default function HowItWorks() {
           <div className="rounded-3xl border border-black/10 bg-white/60 p-6 backdrop-blur">
             <h2 className="text-xl font-semibold">Before you lose it (best)</h2>
             <ol className="mt-3 space-y-2 text-sm text-[var(--muted)]">
-              <li>1) Create a return tag (QR, sticker, sleeve tag, inside case).</li>
+              <li>1) Create a return tag (serial code, sticker, sleeve tag, inside case).</li>
               <li>2) Attach it to the item so only a finder can see it.</li>
               <li>3) Post the return tag proof to the registry.</li>
               <li>4) Set a bounty for the finder (optional).</li>
@@ -33,6 +33,14 @@ export default function HowItWorks() {
               <li>1) Enter the return tag code.</li>
               <li>2) Prove you saw it without revealing the code.</li>
               <li>3) Return the item and receive the bounty.</li>
+            </ol>
+          </div>
+          <div className="rounded-3xl border border-black/10 bg-white/60 p-6 backdrop-blur">
+            <h2 className="text-xl font-semibold">If you found something (no tag)</h2>
+            <ol className="mt-3 space-y-2 text-sm text-[var(--muted)]">
+              <li>1) Report the item with a private message.</li>
+              <li>2) Search lost reports by item type.</li>
+              <li>3) The owner verifies and arranges the return.</li>
             </ol>
           </div>
         </section>

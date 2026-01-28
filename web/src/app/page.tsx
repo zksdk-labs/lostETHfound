@@ -54,7 +54,7 @@ export default function Home() {
             </p>
             <ul className="mt-4 space-y-2 text-sm">
               <li>• Perfect for MacBooks, phones, tagged cards</li>
-              <li>• Works with QR, sticker, sleeve tag, or short phrase</li>
+              <li>• Works with a serial code, sticker, sleeve tag, or short phrase</li>
               <li>• One‑time return, no personal data on‑chain</li>
             </ul>
           </div>

@@ -386,7 +386,7 @@ export default function LostPage() {
                     placeholder="0"
                   />
                   <p className="text-xs text-[var(--muted)]">
-                    Leave at 0 if you don’t want a bounty.
+                    For no-tag items, this is a pledge (not escrowed in the demo).
                   </p>
                 </label>
               </div>
@@ -405,33 +405,101 @@ export default function LostPage() {
               </label>
 
               <div className="grid gap-4 md:grid-cols-2">
-                {[
-                  { label: "Color / material", placeholder: "e.g. matte black, leather" },
-                  { label: "Where was it lost?", placeholder: "e.g. Nimman Road café" },
-                  { label: "When did you last see it?", placeholder: "e.g. Jan 27, 8–9pm" },
-                  { label: "Unique detail", placeholder: "e.g. sticker, scratch, engraving" },
-                ].map((item) => (
-                  <label key={item.label} className="flex flex-col gap-2 text-sm">
-                    {item.label}
-                    <input
-                      className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
-                      placeholder={item.placeholder}
-                    />
-                  </label>
-                ))}
+                <label className="flex flex-col gap-2 text-sm">
+                  Color / material
+                  <input
+                    className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                    value={hintColor}
+                    onChange={(event) => setHintColor(event.target.value)}
+                    placeholder="e.g. matte black, leather"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm">
+                  Where was it lost?
+                  <input
+                    className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                    value={hintLocation}
+                    onChange={(event) => setHintLocation(event.target.value)}
+                    placeholder="e.g. Nimman Road café"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm">
+                  When did you last see it?
+                  <input
+                    className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                    value={hintTime}
+                    onChange={(event) => setHintTime(event.target.value)}
+                    placeholder="e.g. Jan 27, 8–9pm"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm">
+                  Unique detail
+                  <input
+                    className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                    value={hintDetail}
+                    onChange={(event) => setHintDetail(event.target.value)}
+                    placeholder="e.g. sticker, scratch, engraving"
+                  />
+                </label>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <button
                   type="button"
-                  className="w-full rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black"
+                  disabled={isPending}
+                  className="w-full rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={handlePost}
                 >
-                  Post lost report
+                  {isPending ? "Sending..." : "Post lost report"}
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-full border border-black/15 px-6 py-3 text-sm font-semibold"
+                  onClick={handleSearchFound}
+                >
+                  Search found reports
                 </button>
               </div>
 
               {status && <p className="text-sm text-[var(--muted)]">{status}</p>}
+              {searchStatus && <p className="text-sm text-[var(--muted)]">{searchStatus}</p>}
+
+              {foundReports.length > 0 && (
+                <div className="grid gap-3">
+                  {foundReports.map((report) => (
+                    <div
+                      key={`${report.reportId}-${report.blockNumber}`}
+                      className="rounded-2xl border border-black/10 bg-white/80 p-4 text-xs"
+                    >
+                      <p className="text-[var(--muted)]">Found report</p>
+                      <p className="mt-2 break-all font-mono text-[10px]">
+                        Report ID: {report.reportId}
+                      </p>
+                      <p className="mt-2 break-all font-mono text-[10px]">
+                        Reporter: {report.reporter}
+                      </p>
+                      <p className="mt-2 break-all font-mono text-[10px]">
+                        Message: {report.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <details className="rounded-2xl border border-black/10 bg-white/80 p-4 text-sm">
+                <summary className="cursor-pointer font-semibold">Advanced</summary>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="flex flex-col gap-2 text-sm">
+                    Registry contract
+                    <input
+                      className="rounded-xl border border-black/15 bg-white/80 px-4 py-3 font-mono text-xs"
+                      value={contractAddress}
+                      onChange={(event) => setContractAddress(event.target.value)}
+                      placeholder="0x..."
+                    />
+                  </label>
+                </div>
+              </details>
             </div>
           )}
         </section>

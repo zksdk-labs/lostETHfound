@@ -15,10 +15,20 @@ import {
 import { DEFAULT_CATEGORY, itemCategories, resolveCategoryLabel } from "@/lib/categories";
 import { lostETHFoundAbi } from "@/lib/contracts";
 import { parseSolidityCallData } from "@/lib/solidity";
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
-import { parseEther } from "viem";
+import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import { parseAbiItem, parseEther, stringToHex } from "viem";
+
+type FlowMode = "tag" | "noTag";
+type LostReport = {
+  reportId: string;
+  reporter: string;
+  contact: string;
+  hints: string;
+  blockNumber: bigint;
+};
 
 export default function ClaimPage() {
+  const [mode, setMode] = useState<FlowMode>("tag");
   const [categoryChoice, setCategoryChoice] = useState(DEFAULT_CATEGORY);
   const [customCategory, setCustomCategory] = useState("");
   const [secretInput, setSecretInput] = useState("");
@@ -34,10 +44,16 @@ export default function ClaimPage() {
   const [proofJson, setProofJson] = useState<string>("");
   const [callData, setCallData] = useState<string>("");
   const [status, setStatus] = useState<string>("");
+  const [message, setMessage] = useState("");
+  const [contact, setContact] = useState("");
+  const [searchStatus, setSearchStatus] = useState("");
+  const [lostReports, setLostReports] = useState<LostReport[]>([]);
 
   const resolvedCategory = resolveCategoryLabel(categoryChoice, customCategory);
   const { address } = useAccount();
+  const publicClient = usePublicClient();
   const { writeContractAsync, isPending } = useWriteContract();
+  const deploymentBlock = BigInt(process.env.NEXT_PUBLIC_DEPLOYMENT_BLOCK || "0");
 
   const { data: claimBond } = useReadContract({
     address: contractAddress ? (contractAddress as `0x${string}`) : undefined,
@@ -137,6 +153,98 @@ export default function ClaimPage() {
     }
   };
 
+  const handleReportFound = async () => {
+    setStatus("");
+    if (!resolvedCategory) {
+      setStatus("Choose an item type or enter a custom one.");
+      return;
+    }
+    if (!contractAddress) {
+      setStatus("Enter the registry contract address.");
+      return;
+    }
+
+    try {
+      setStatus("Sending found report...");
+      const catId = await categoryIdFromLabel(resolvedCategory);
+      const payload = JSON.stringify(
+        { message: message.trim(), contact: contact.trim() },
+        null,
+        0
+      );
+      const messageBytes = payload.trim()
+        ? payload.trim().startsWith("0x")
+          ? payload.trim()
+          : stringToHex(payload.trim())
+        : "0x";
+
+      await writeContractAsync({
+        address: contractAddress as `0x${string}`,
+        abi: lostETHFoundAbi,
+        functionName: "reportFound",
+        args: [toBytes32(catId), messageBytes as `0x${string}`],
+      });
+
+      setStatus("Found report sent. Confirm in wallet.");
+    } catch (error) {
+      setStatus(`Report failed: ${String(error)}`);
+    }
+  };
+
+  const handleSearchLost = async () => {
+    setSearchStatus("");
+    setLostReports([]);
+    if (!resolvedCategory) {
+      setSearchStatus("Choose an item type or enter a custom one.");
+      return;
+    }
+    if (!contractAddress) {
+      setSearchStatus("Enter the registry contract address.");
+      return;
+    }
+    if (!publicClient) {
+      setSearchStatus("Wallet client not ready.");
+      return;
+    }
+
+    try {
+      setSearchStatus("Searching lost reports...");
+      const catId = await categoryIdFromLabel(resolvedCategory);
+      const event = parseAbiItem(
+        "event LostReported(bytes32 indexed reportId, bytes32 indexed categoryId, address indexed reporter, bytes encryptedContact, bytes hints)"
+      );
+
+      const logs = await publicClient.getLogs({
+        address: contractAddress as `0x${string}`,
+        event,
+        args: { categoryId: toBytes32(catId) },
+        fromBlock: deploymentBlock,
+      });
+
+      const nextReports: LostReport[] = logs.map((log) => {
+        const args = log.args as {
+          reportId: `0x${string}`;
+          categoryId: `0x${string}`;
+          reporter: `0x${string}`;
+          encryptedContact: `0x${string}`;
+          hints: `0x${string}`;
+        };
+        return {
+          reportId: args.reportId,
+          reporter: args.reporter,
+          contact: args.encryptedContact,
+          hints: args.hints,
+          blockNumber: log.blockNumber ?? 0n,
+        };
+      });
+
+      setLostReports(nextReports);
+      setSearchStatus(nextReports.length ? "" : "No lost reports yet.");
+    } catch (error) {
+      setSearchStatus(`Search failed: ${String(error)}`);
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <Nav />
@@ -144,11 +252,33 @@ export default function ClaimPage() {
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-8 shadow-glow backdrop-blur">
           <h1 className="text-3xl font-semibold">Report a found item</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Enter the return tag code from the item. We generate a proof on this device, then
-            submit it on‑chain.
+            If the item has a return tag, use it to generate a proof. If it doesn’t, report it so
+            the owner can find you.
           </p>
 
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
+          <div className="mt-6 inline-flex rounded-full border border-black/15 bg-white/80 p-1 text-sm">
+            <button
+              type="button"
+              className={`rounded-full px-4 py-2 ${
+                mode === "tag" ? "bg-[var(--accent)] text-black" : "text-[var(--muted)]"
+              }`}
+              onClick={() => setMode("tag")}
+            >
+              Has a return tag
+            </button>
+            <button
+              type="button"
+              className={`rounded-full px-4 py-2 ${
+                mode === "noTag" ? "bg-[var(--accent)] text-black" : "text-[var(--muted)]"
+              }`}
+              onClick={() => setMode("noTag")}
+            >
+              No return tag
+            </button>
+          </div>
+
+          {mode === "tag" ? (
+            <div className="mt-6 grid gap-5 md:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm">
               Item type
               <select
@@ -217,6 +347,121 @@ export default function ClaimPage() {
               </button>
             </div>
           </div>
+          ) : (
+            <div className="mt-6 grid gap-5">
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="flex flex-col gap-2 text-sm">
+                  Item type
+                  <select
+                    className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                    value={categoryChoice}
+                    onChange={(event) => setCategoryChoice(event.target.value)}
+                  >
+                    {itemCategories.map((category) => (
+                      <option key={category.value} value={category.value}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-[var(--muted)]">
+                    Pick the type an owner would recognize immediately.
+                  </p>
+                </label>
+
+                {categoryChoice === "other" && (
+                  <label className="flex flex-col gap-2 text-sm">
+                    Custom item type
+                    <input
+                      className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                      value={customCategory}
+                      onChange={(event) => setCustomCategory(event.target.value)}
+                      placeholder="e.g. camera"
+                    />
+                  </label>
+                )}
+              </div>
+
+              <label className="flex flex-col gap-2 text-sm">
+                Message for owner (private)
+                <textarea
+                  className="min-h-[120px] rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  placeholder="Describe where you found it and how to return it."
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 text-sm">
+                Contact for return (private)
+                <input
+                  className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                  value={contact}
+                  onChange={(event) => setContact(event.target.value)}
+                  placeholder="For demo: email or Telegram (use burner)."
+                />
+              </label>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={isPending}
+                  className="w-full rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={handleReportFound}
+                >
+                  {isPending ? "Sending..." : "Report found"}
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-full border border-black/15 px-6 py-3 text-sm font-semibold"
+                  onClick={handleSearchLost}
+                >
+                  Search lost reports
+                </button>
+              </div>
+
+              {searchStatus && <p className="text-sm text-[var(--muted)]">{searchStatus}</p>}
+
+              {lostReports.length > 0 && (
+                <div className="grid gap-3">
+                  {lostReports.map((report) => (
+                    <div
+                      key={`${report.reportId}-${report.blockNumber}`}
+                      className="rounded-2xl border border-black/10 bg-white/80 p-4 text-xs"
+                    >
+                      <p className="text-[var(--muted)]">Lost report</p>
+                      <p className="mt-2 break-all font-mono text-[10px]">
+                        Report ID: {report.reportId}
+                      </p>
+                      <p className="mt-2 break-all font-mono text-[10px]">
+                        Reporter: {report.reporter}
+                      </p>
+                      <p className="mt-2 break-all font-mono text-[10px]">
+                        Contact: {report.contact}
+                      </p>
+                      <p className="mt-2 break-all font-mono text-[10px]">
+                        Hints: {report.hints}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <details className="rounded-2xl border border-black/10 bg-white/80 p-4 text-sm">
+                <summary className="cursor-pointer font-semibold">Advanced</summary>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="flex flex-col gap-2 text-sm">
+                    Registry contract
+                    <input
+                      className="rounded-xl border border-black/15 bg-white/80 px-4 py-3 font-mono text-xs"
+                      value={contractAddress}
+                      onChange={(event) => setContractAddress(event.target.value)}
+                      placeholder="0x..."
+                    />
+                  </label>
+                </div>
+              </details>
+            </div>
+          )}
 
           {status && <p className="mt-4 text-sm text-[var(--muted)]">{status}</p>}
         </section>

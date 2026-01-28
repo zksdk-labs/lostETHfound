@@ -10,7 +10,7 @@ Protocol spec: `SPEC.md`
 ## 0) Scope and Assumptions
 - The MVP ships **two systems** in one product:
   - **Trustless lane** (auto-claim) for items with a **high-entropy secret** (QR/tag/long random phrase, or strong serial + secret sticker).
-  - **Assisted lane** (owner-verify) for items without a secret, using Q/A + encrypted chat.
+  - **Assisted lane** (owner-verify) for items without a secret, using Q/A + encrypted chat. For MVP, this is event-based (no extra ZK circuit).
 - Low-entropy attributes (color, brand, day) are **not** a security gate; they are only hints in the assisted lane.
 - Credit cards are supported **only via a wallet/sleeve tag secret** or a local-only secret. If any card info is used, it must stay **entirely local** and **never be transmitted or stored**, with only a derived commitment used on-chain.
 - MVP focuses on macbooks, phones, and credit cards (plus any tagged items).
@@ -40,6 +40,10 @@ Rationale: Circom + snarkjs has the fastest path to a Solidity verifier and plen
 This keeps everything on-chain while not revealing the secret.
 
 **Assisted lane:** Owner registers a commitment to answers (salted). Finder submits answers via encrypted chat. Owner approves and releases reward (optional ZK proof that answers match, if time permits).
+For MVP, assisted lane uses **on-chain events only**:
+- `reportLost` emits `LostReported` with encrypted hints/contact.
+- `reportFound` emits `FoundReported` with encrypted message.
+- UI searches logs via `getLogs` (no indexer required).
 
 ---
 
@@ -57,6 +61,9 @@ Functions:
   - Checks nullifier unused
   - Marks nullifier used
   - Pays reward
+Event-only assisted lane:
+- `reportLost(bytes32 categoryId, bytes encryptedContact, bytes hints)` → emits `LostReported`
+- `reportFound(bytes32 categoryId, bytes encryptedMessage)` → emits `FoundReported`
 
 Storage:
 - `mapping(bytes32 => Item)`
@@ -98,17 +105,16 @@ Notes:
 ## 5) Frontend Flow
 
 ### Owner Flow
-1. Choose item type: macbook / phone / credit card / other.
-2. Choose lane:
-   - **Trustless:** generate secret (display QR / text to print).
-   - **Assisted:** set Q/A hints (salted commitment).
-3. Compute commitment locally.
-4. Submit register tx with commitment + encrypted contact + reward.
+1. **Add a Return Tag (pre-loss):**
+   - Choose item type → generate return tag code → post commitment + bounty.
+2. **Report Lost:**
+   - If the item has a return tag: enter the code → check registry status (registered/claimed).
+   - If no return tag: post lost report (encrypted hints/contact) via `reportLost`.
 
 ### Finder Flow
 **Trustless:** scan/enter secret from the item → generate ZK proof → submit claim tx.
 
-**Assisted:** answer Q/A via encrypted chat → owner verifies → owner releases reward.
+**Assisted (no tag):** submit `reportFound` with encrypted message; optionally search `LostReported` logs by item type.
 
 ### Contact
 - Owner contact info is encrypted with a public key and stored on-chain.
@@ -137,6 +143,7 @@ Notes:
 2. Integrate snarkjs proof generation in frontend.
 3. Add encrypted contact storage + display.
 4. Demo script and walkthrough.
+5. Add event-based lost/found reports + log search in UI.
 
 ---
 
@@ -151,6 +158,7 @@ Notes:
 - Replace mapping with Merkle tree + membership proof.
 - Add owner-mediated Q/A proof (not fully trustless).
 - Add a lightweight off-chain indexer for better UX.
+ - Optional: ZK “question pack” circuit (threshold match). Not needed for MVP.
 
 ---
 

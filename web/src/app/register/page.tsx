@@ -8,7 +8,6 @@ import {
   formatHex,
   parseField,
   parseSecretInput,
-  randomField,
   toBytes32,
 } from "@/lib/zk";
 import { DEFAULT_CATEGORY, itemCategories, resolveCategoryLabel } from "@/lib/categories";
@@ -29,14 +28,57 @@ export default function RegisterPage() {
   const [categoryId, setCategoryId] = useState<bigint | null>(null);
   const [commitment, setCommitment] = useState<bigint | null>(null);
   const [status, setStatus] = useState<string>("");
+  const [copyStatus, setCopyStatus] = useState("");
 
   const resolvedCategory = resolveCategoryLabel(categoryChoice, customCategory);
   const { address } = useAccount();
   const { writeContractAsync, isPending } = useWriteContract();
 
+  const buildSerialCode = () => {
+    const bytes = new Uint8Array(15);
+    crypto.getRandomValues(bytes);
+
+    let value = 0n;
+    for (const byte of bytes) {
+      value = (value << 8n) + BigInt(byte);
+    }
+
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const totalChars = 24;
+    let raw = "";
+
+    for (let i = 0; i < totalChars; i += 1) {
+      const index = Number(value % 32n);
+      raw = alphabet[index] + raw;
+      value /= 32n;
+    }
+
+    const groups: string[] = [];
+    for (let i = 0; i < totalChars; i += 4) {
+      groups.push(raw.slice(i, i + 4));
+    }
+
+    return `LF-${groups.join("-")}`;
+  };
+
   const handleGenerateSecret = () => {
-    const secret = randomField();
-    setSecretInput(formatHex(secret));
+    setSecretInput(buildSerialCode());
+    setCopyStatus("");
+  };
+
+  const handleCopySecret = async () => {
+    const code = secretInput.trim();
+    if (!code) {
+      setCopyStatus("Generate a return code first.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyStatus("Copied to clipboard.");
+    } catch (error) {
+      setCopyStatus(`Copy failed: ${String(error)}`);
+    }
   };
 
   const handleCompute = async () => {
@@ -96,8 +138,9 @@ export default function RegisterPage() {
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-8 shadow-glow backdrop-blur">
           <h1 className="text-3xl font-semibold">Add a return tag</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Use this before the item is lost. Generate a return code, put it on the item (sticker,
-            sleeve tag, inside case), then post the proof on‑chain. Your details stay private.
+            Use this before the item is lost. Generate a serial return code, put it on the item
+            (sticker, sleeve tag, inside case), then post the proof on-chain. Your details stay
+            private.
           </p>
 
           <div className="mt-6 grid gap-5 md:grid-cols-2">
@@ -144,26 +187,52 @@ export default function RegisterPage() {
           </div>
 
           <label className="mt-5 flex flex-col gap-2 text-sm">
-            Return tag code (put on the item)
-            <div className="flex gap-2">
+            Return serial code (put on the item)
+            <div className="flex flex-wrap gap-2">
               <input
-                className="flex-1 rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                className="min-w-[220px] flex-1 rounded-xl border border-black/15 bg-white/80 px-4 py-3"
                 value={secretInput}
                 onChange={(event) => setSecretInput(event.target.value)}
-                placeholder="Tap Generate"
+                placeholder="Tap Generate Serial"
               />
               <button
                 type="button"
                 className="rounded-xl border border-black/15 px-4 py-3 text-sm"
                 onClick={handleGenerateSecret}
               >
-                Generate
+                Generate serial
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-black/15 px-4 py-3 text-sm"
+                onClick={handleCopySecret}
+              >
+                Copy code
               </button>
             </div>
             <p className="text-xs text-[var(--muted)]">
-              You can type a short phrase or tap Generate. Put this code on the item (inside
-              case/sleeve, under sticker, etc). A finder needs it to return your item.
+              Put this exact code on the item (inside case/sleeve, under sticker, etc). A finder
+              needs it to return your item.
             </p>
+            <div className="rounded-3xl border border-black/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.9),rgba(255,236,204,0.9))] p-5 shadow-[0_24px_60px_rgba(28,26,23,0.12)]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.4em] text-[var(--muted)]">
+                    Return code
+                  </p>
+                  <p className="mt-3 break-all font-mono text-xl tracking-[0.25em] md:text-2xl">
+                    {secretInput.trim() || "LF-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"}
+                  </p>
+                </div>
+                <div className="rounded-full border border-black/15 bg-white/80 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-[var(--muted)]">
+                  LostETHFound
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-[var(--muted)]">
+                Print or engrave this serial. Keep a backup for yourself.
+              </p>
+              {copyStatus && <p className="mt-2 text-xs text-[var(--muted)]">{copyStatus}</p>}
+            </div>
           </label>
 
           <label className="mt-5 flex flex-col gap-2 text-sm">

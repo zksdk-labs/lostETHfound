@@ -30,6 +30,7 @@ Legend: [ ] todo, [x] done
 - [x] Write basic tests: register -> claim -> payout
 - [x] E2E proof test: real Groth16 proof verifies on-chain
 - [x] Add deployment script
+- [x] Add event-only lost/found reports (no-tag lane)
 
 ## 4) Web (Next.js)
 - [x] Initialize Next.js app in `web/`
@@ -39,10 +40,11 @@ Legend: [ ] todo, [x] done
 - [x] Implement Claim flow: secret -> proof -> claim tx (local proof gen)
 - [x] Assisted flow: Q/A hints + encrypted contact (UI stub)
 - [x] Wire wagmi contract calls (register + claim)
+- [x] Report lost/found events + log search (no-tag lane)
 
 ## 5) Demo & UX
-- [ ] Add QR/secret display + copy
-- [ ] Add simple status UI (registered/claimed)
+- [x] Add serial/secret display + copy
+- [x] Add simple status UI (registered/claimed)
 - [ ] Add demo script notes
 
 ## 6) Optional Hardening
