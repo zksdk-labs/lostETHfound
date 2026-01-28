@@ -83,9 +83,9 @@ export default function RegisterPage() {
         value: rewardWei,
       });
 
-      setStatus("Report sent. Confirm in wallet.");
+      setStatus("Return tag posted. Confirm in wallet.");
     } catch (error) {
-      setStatus(`Report failed: ${String(error)}`);
+      setStatus(`Post failed: ${String(error)}`);
     }
   };
 
@@ -94,10 +94,10 @@ export default function RegisterPage() {
       <Nav />
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 pb-20">
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-8 shadow-glow backdrop-blur">
-          <h1 className="text-3xl font-semibold">Report a lost item</h1>
+          <h1 className="text-3xl font-semibold">Add a return tag</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Add a hidden return code to the item (sticker, sleeve tag, inside case). We only post a
-            proof on‑chain — your details stay private.
+            Use this before the item is lost. Generate a return code, put it on the item (sticker,
+            sleeve tag, inside case), then post the proof on‑chain. Your details stay private.
           </p>
 
           <div className="mt-6 grid gap-5 md:grid-cols-2">
@@ -144,7 +144,7 @@ export default function RegisterPage() {
           </div>
 
           <label className="mt-5 flex flex-col gap-2 text-sm">
-            Hidden return code (put on the item)
+            Return tag code (put on the item)
             <div className="flex gap-2">
               <input
                 className="flex-1 rounded-xl border border-black/15 bg-white/80 px-4 py-3"
@@ -254,37 +254,6 @@ export default function RegisterPage() {
           </p>
         </section>
 
-        <section className="rounded-[28px] border border-black/10 bg-white/70 p-6 text-sm">
-          <h2 className="text-lg font-semibold">Assisted lane (owner-verified)</h2>
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            For items without a hidden code. Store salted answers or encrypted contact info for the
-            owner to verify. This is a UI stub for the MVP.
-          </p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm">
-              Encrypted contact (placeholder)
-              <textarea
-                className="min-h-[120px] rounded-xl border border-black/15 bg-white/80 px-4 py-3"
-                placeholder="Paste encrypted contact blob here"
-              />
-            </label>
-            <div className="grid gap-3">
-              {[
-                "What color is it?",
-                "Where was it lost?",
-                "What accessory is attached?",
-              ].map((question) => (
-                <label key={question} className="flex flex-col gap-2 text-sm">
-                  {question}
-                  <input
-                    className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
-                    placeholder="Answer (salted / hashed locally)"
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   );

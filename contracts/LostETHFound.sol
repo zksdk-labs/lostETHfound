@@ -19,6 +19,19 @@ contract LostETHFound {
 
     event ItemRegistered(bytes32 indexed commitment, address indexed owner, uint256 reward);
     event Claimed(bytes32 indexed commitment, bytes32 indexed nullifier, address indexed payout);
+    event LostReported(
+        bytes32 indexed reportId,
+        bytes32 indexed categoryId,
+        address indexed reporter,
+        bytes encryptedContact,
+        bytes hints
+    );
+    event FoundReported(
+        bytes32 indexed reportId,
+        bytes32 indexed categoryId,
+        address indexed reporter,
+        bytes encryptedMessage
+    );
 
     constructor(address verifierAddress, uint256 claimBondWei) {
         require(verifierAddress != address(0), "verifier required");
@@ -88,5 +101,25 @@ contract LostETHFound {
         }
 
         emit Claimed(commitment, nullifier, payout);
+    }
+
+    function reportLost(
+        bytes32 categoryId,
+        bytes calldata encryptedContact,
+        bytes calldata hints
+    ) external {
+        require(categoryId != bytes32(0), "category required");
+        bytes32 reportId = keccak256(
+            abi.encodePacked(msg.sender, block.number, categoryId, encryptedContact, hints)
+        );
+        emit LostReported(reportId, categoryId, msg.sender, encryptedContact, hints);
+    }
+
+    function reportFound(bytes32 categoryId, bytes calldata encryptedMessage) external {
+        require(categoryId != bytes32(0), "category required");
+        bytes32 reportId = keccak256(
+            abi.encodePacked(msg.sender, block.number, categoryId, encryptedMessage)
+        );
+        emit FoundReported(reportId, categoryId, msg.sender, encryptedMessage);
     }
 }

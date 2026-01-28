@@ -9,6 +9,9 @@ export function Nav() {
       </Link>
       <div className="flex items-center gap-3 text-sm">
         <Link className="rounded-full border border-black/15 px-4 py-2 hover:border-black/40" href="/register">
+          Add a Return Tag
+        </Link>
+        <Link className="rounded-full border border-black/15 px-4 py-2 hover:border-black/40" href="/lost">
           Report Lost
         </Link>
         <Link className="rounded-full border border-black/15 px-4 py-2 hover:border-black/40" href="/claim">

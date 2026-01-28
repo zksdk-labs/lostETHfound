@@ -27,6 +27,27 @@ export const lostETHFoundAbi = [
   },
   {
     type: "function",
+    name: "reportLost",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "categoryId", type: "bytes32" },
+      { name: "encryptedContact", type: "bytes" },
+      { name: "hints", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "reportFound",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "categoryId", type: "bytes32" },
+      { name: "encryptedMessage", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "claimBond",
     stateMutability: "view",
     inputs: [],
@@ -43,5 +64,28 @@ export const lostETHFoundAbi = [
       { name: "reward", type: "uint256" },
       { name: "claimed", type: "bool" },
     ],
+  },
+  {
+    type: "event",
+    name: "LostReported",
+    inputs: [
+      { name: "reportId", type: "bytes32", indexed: true },
+      { name: "categoryId", type: "bytes32", indexed: true },
+      { name: "reporter", type: "address", indexed: true },
+      { name: "encryptedContact", type: "bytes", indexed: false },
+      { name: "hints", type: "bytes", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "FoundReported",
+    inputs: [
+      { name: "reportId", type: "bytes32", indexed: true },
+      { name: "categoryId", type: "bytes32", indexed: true },
+      { name: "reporter", type: "address", indexed: true },
+      { name: "encryptedMessage", type: "bytes", indexed: false },
+    ],
+    anonymous: false,
   },
 ] as const;

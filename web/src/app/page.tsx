@@ -22,6 +22,12 @@ export default function Home() {
               href="/register"
               className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black shadow-glow"
             >
+              Add a Return Tag
+            </Link>
+            <Link
+              href="/lost"
+              className="rounded-full border border-black/20 px-6 py-3 text-sm font-semibold"
+            >
               Report lost
             </Link>
             <Link
@@ -41,14 +47,14 @@ export default function Home() {
 
         <section className="grid gap-6 md:grid-cols-2">
           <div className="rounded-3xl border border-black/10 bg-white/60 p-6 backdrop-blur">
-            <h2 className="text-xl font-semibold">Fast return (hidden code)</h2>
+            <h2 className="text-xl font-semibold">Fast return (return tag)</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Add a hidden code to your item. A finder can prove they saw it and receive the bounty
-              instantly, without learning anything else about you.
+              Add a return tag before you lose the item. A finder can prove they saw it and receive
+              the bounty instantly, without learning anything else about you.
             </p>
             <ul className="mt-4 space-y-2 text-sm">
               <li>• Perfect for MacBooks, phones, tagged cards</li>
-              <li>• Works with QR, sticker, sleeve tag, or hidden phrase</li>
+              <li>• Works with QR, sticker, sleeve tag, or short phrase</li>
               <li>• One‑time return, no personal data on‑chain</li>
             </ul>
           </div>

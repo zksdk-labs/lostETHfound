@@ -144,7 +144,7 @@ export default function ClaimPage() {
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-8 shadow-glow backdrop-blur">
           <h1 className="text-3xl font-semibold">Report a found item</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Enter the hidden return code from the item. We generate a proof on this device, then
+            Enter the return tag code from the item. We generate a proof on this device, then
             submit it on‑chain.
           </p>
 
