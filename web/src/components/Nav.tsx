@@ -9,10 +9,10 @@ export function Nav() {
       </Link>
       <div className="flex items-center gap-3 text-sm">
         <Link className="rounded-full border border-black/15 px-4 py-2 hover:border-black/40" href="/register">
-          Register
+          Report Lost
         </Link>
         <Link className="rounded-full border border-black/15 px-4 py-2 hover:border-black/40" href="/claim">
-          Claim
+          Report Found
         </Link>
         <Link className="rounded-full border border-black/10 px-4 py-2 text-[var(--muted)] hover:border-black/40" href="/how-it-works">
           How it works

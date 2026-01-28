@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Nav } from "@/components/Nav";
 import {
   categoryIdFromLabel,
@@ -8,16 +8,19 @@ import {
   formatHex,
   nullifierFrom,
   parseField,
+  parseSecretInput,
   randomField,
   toBytes32,
 } from "@/lib/zk";
+import { DEFAULT_CATEGORY, itemCategories, resolveCategoryLabel } from "@/lib/categories";
 import { lostETHFoundAbi } from "@/lib/contracts";
 import { parseSolidityCallData } from "@/lib/solidity";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { parseEther } from "viem";
 
 export default function ClaimPage() {
-  const [category, setCategory] = useState("electronics");
+  const [categoryChoice, setCategoryChoice] = useState(DEFAULT_CATEGORY);
+  const [customCategory, setCustomCategory] = useState("");
   const [secretInput, setSecretInput] = useState("");
   const [itemSaltInput, setItemSaltInput] = useState("0");
   const [claimIdInput, setClaimIdInput] = useState("");
@@ -32,6 +35,7 @@ export default function ClaimPage() {
   const [callData, setCallData] = useState<string>("");
   const [status, setStatus] = useState<string>("");
 
+  const resolvedCategory = resolveCategoryLabel(categoryChoice, customCategory);
   const { address } = useAccount();
   const { writeContractAsync, isPending } = useWriteContract();
 
@@ -44,6 +48,12 @@ export default function ClaimPage() {
     },
   });
 
+  useEffect(() => {
+    if (!claimIdInput) {
+      setClaimIdInput(formatHex(randomField()));
+    }
+  }, [claimIdInput]);
+
   const handleGenerateClaimId = () => {
     const claimId = randomField();
     setClaimIdInput(formatHex(claimId));
@@ -51,18 +61,22 @@ export default function ClaimPage() {
 
   const handleGenerateProof = async () => {
     setStatus("");
-    const secret = parseField(secretInput);
+    const secret = parseSecretInput(secretInput);
     const itemSalt = parseField(itemSaltInput) ?? 0n;
     const claimId = parseField(claimIdInput);
 
+    if (!resolvedCategory) {
+      setStatus("Choose an item type or enter a custom one.");
+      return;
+    }
     if (secret === null || claimId === null) {
-      setStatus("Enter a valid secret and claimId.");
+      setStatus("Enter a valid return code.");
       return;
     }
 
     try {
       setStatus("Generating proof...");
-      const catId = await categoryIdFromLabel(category);
+      const catId = await categoryIdFromLabel(resolvedCategory);
       const nextCommitment = await commitmentFrom(secret, catId, itemSalt);
       const nextNullifier = await nullifierFrom(secret, claimId);
 
@@ -87,7 +101,7 @@ export default function ClaimPage() {
       setPublicSignals(publicSignals);
       setProofJson(JSON.stringify(proof, null, 2));
       setCallData(exportedCallData);
-      setStatus("Proof ready. You can claim on-chain.");
+      setStatus("Proof ready. You can submit it on-chain.");
     } catch (error) {
       setStatus(`Proof failed: ${String(error)}`);
     }
@@ -95,7 +109,7 @@ export default function ClaimPage() {
 
   const handleClaim = async () => {
     if (!callData || !contractAddress) {
-      setStatus("Generate proof and enter contract address first.");
+      setStatus("Generate a proof and make sure the registry address is set.");
       return;
     }
 
@@ -117,9 +131,9 @@ export default function ClaimPage() {
         value: bond,
       });
 
-      setStatus("Claim tx sent. Confirm in wallet.");
+      setStatus("Return sent. Confirm in wallet.");
     } catch (error) {
-      setStatus(`Claim failed: ${String(error)}`);
+      setStatus(`Submit failed: ${String(error)}`);
     }
   };
 
@@ -128,67 +142,67 @@ export default function ClaimPage() {
       <Nav />
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 pb-20">
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-8 shadow-glow backdrop-blur">
-          <h1 className="text-3xl font-semibold">Claim a found item</h1>
+          <h1 className="text-3xl font-semibold">Report a found item</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Enter the secret from the item and generate a ZK proof locally. Then submit the claim
-            on-chain.
+            Enter the hidden return code from the item. We generate a proof on this device, then
+            submit it on‑chain.
           </p>
 
           <div className="mt-6 grid gap-5 md:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm">
-              Contract address
-              <input
-                className="rounded-xl border border-black/15 bg-white/80 px-4 py-3 font-mono text-xs"
-                value={contractAddress}
-                onChange={(event) => setContractAddress(event.target.value)}
-                placeholder="0x..."
-              />
-            </label>
-
-            <label className="flex flex-col gap-2 text-sm">
-              Category label
-              <input
+              Item type
+              <select
                 className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-              />
+                value={categoryChoice}
+                onChange={(event) => setCategoryChoice(event.target.value)}
+              >
+                {itemCategories.map((category) => (
+                  <option key={category.value} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-[var(--muted)]">
+                Must match the type used by the owner.
+              </p>
             </label>
 
-            <label className="flex flex-col gap-2 text-sm">
-              Secret
+            {categoryChoice === "other" && (
+              <label className="flex flex-col gap-2 text-sm">
+                Custom item type
+                <input
+                  className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                  value={customCategory}
+                  onChange={(event) => setCustomCategory(event.target.value)}
+                  placeholder="e.g. camera"
+                />
+              </label>
+            )}
+
+            <label className="flex flex-col gap-2 text-sm md:col-span-2">
+              Hidden return code
               <input
                 className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
                 value={secretInput}
                 onChange={(event) => setSecretInput(event.target.value)}
-                placeholder="0x..."
+                placeholder="Code from the item"
               />
             </label>
 
-            <label className="flex flex-col gap-2 text-sm">
-              Item salt (optional)
-              <input
-                className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
-                value={itemSaltInput}
-                onChange={(event) => setItemSaltInput(event.target.value)}
-                placeholder="0x0"
-              />
-            </label>
-
-            <label className="flex flex-col gap-2 text-sm">
-              Claim ID (random per claim)
+            <label className="flex flex-col gap-2 text-sm md:col-span-2">
+              Return ID (auto)
               <div className="flex gap-2">
                 <input
                   className="flex-1 rounded-xl border border-black/15 bg-white/80 px-4 py-3"
                   value={claimIdInput}
-                  onChange={(event) => setClaimIdInput(event.target.value)}
-                  placeholder="0x..."
+                  readOnly
                 />
                 <button
                   type="button"
                   className="rounded-xl border border-black/15 px-4 py-3 text-sm"
                   onClick={handleGenerateClaimId}
                 >
-                  Generate
+                  New
                 </button>
               </div>
             </label>
@@ -199,7 +213,7 @@ export default function ClaimPage() {
                 className="w-full rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black"
                 onClick={handleGenerateProof}
               >
-                Generate proof
+                Create proof
               </button>
             </div>
           </div>
@@ -208,7 +222,10 @@ export default function ClaimPage() {
         </section>
 
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-6 text-sm">
-          <h2 className="text-lg font-semibold">Computed values</h2>
+          <h2 className="text-lg font-semibold">Proof details (optional)</h2>
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            You can ignore this unless you want to inspect the on-chain proof data.
+          </p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-black/10 bg-white/80 p-4">
               <p className="text-xs uppercase text-[var(--muted)]">Commitment</p>
@@ -257,26 +274,50 @@ export default function ClaimPage() {
           </div>
 
           <div className="mt-6 grid gap-3 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm">
-              Claim bond override (ETH)
-              <input
-                className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
-                value={bondOverride}
-                onChange={(event) => setBondOverride(event.target.value)}
-                placeholder={claimBond ? claimBond.toString() : "0"}
-              />
-            </label>
-            <div className="flex items-end">
+            <div className="flex items-end md:col-span-2">
               <button
                 type="button"
                 disabled={!address || !callData || isPending}
                 className="w-full rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={handleClaim}
               >
-                {isPending ? "Sending..." : "Claim on-chain"}
+                {isPending ? "Sending..." : "Submit proof"}
               </button>
             </div>
           </div>
+
+          <details className="mt-6 rounded-2xl border border-black/10 bg-white/80 p-4 text-sm">
+            <summary className="cursor-pointer font-semibold">Advanced</summary>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col gap-2 text-sm">
+                Registry contract
+                <input
+                  className="rounded-xl border border-black/15 bg-white/80 px-4 py-3 font-mono text-xs"
+                  value={contractAddress}
+                  onChange={(event) => setContractAddress(event.target.value)}
+                  placeholder="0x..."
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm">
+                Item salt (optional)
+                <input
+                  className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                  value={itemSaltInput}
+                  onChange={(event) => setItemSaltInput(event.target.value)}
+                  placeholder="0"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm">
+                Finder bond (ETH)
+                <input
+                  className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
+                  value={bondOverride}
+                  onChange={(event) => setBondOverride(event.target.value)}
+                  placeholder={claimBond ? claimBond.toString() : "0"}
+                />
+              </label>
+            </div>
+          </details>
         </section>
       </main>
     </div>

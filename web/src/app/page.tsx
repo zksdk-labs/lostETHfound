@@ -11,7 +11,7 @@ export default function Home() {
             Global lost & found registry
           </p>
           <h1 className="mt-4 text-4xl font-semibold leading-tight md:text-6xl">
-            Lost something? Register it. Found something? Return it.
+            Lost something? Report it. Found something? Return it.
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-[var(--muted)]">
             Open to anyone, verifiable on Ethereum. Your personal details never go on‑chain—only a
@@ -22,13 +22,13 @@ export default function Home() {
               href="/register"
               className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black shadow-glow"
             >
-              I lost something
+              Report lost
             </Link>
             <Link
               href="/claim"
               className="rounded-full border border-black/20 px-6 py-3 text-sm font-semibold"
             >
-              I found something
+              Report found
             </Link>
             <Link
               href="/how-it-works"
@@ -41,22 +41,22 @@ export default function Home() {
 
         <section className="grid gap-6 md:grid-cols-2">
           <div className="rounded-3xl border border-black/10 bg-white/60 p-6 backdrop-blur">
-            <h2 className="text-xl font-semibold">Fast claim (with a hidden tag)</h2>
+            <h2 className="text-xl font-semibold">Fast return (hidden code)</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Add a hidden tag to your item. A finder can prove they saw the tag and claim the
-              reward instantly, without learning anything else about you.
+              Add a hidden code to your item. A finder can prove they saw it and receive the bounty
+              instantly, without learning anything else about you.
             </p>
             <ul className="mt-4 space-y-2 text-sm">
               <li>• Perfect for MacBooks, phones, tagged cards</li>
               <li>• Works with QR, sticker, sleeve tag, or hidden phrase</li>
-              <li>• One‑time claim, no personal data on‑chain</li>
+              <li>• One‑time return, no personal data on‑chain</li>
             </ul>
           </div>
           <div className="rounded-3xl border border-black/10 bg-white/60 p-6 backdrop-blur">
-            <h2 className="text-xl font-semibold">Owner‑verified (no tag)</h2>
+            <h2 className="text-xl font-semibold">Owner‑verified (no code)</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
               For items without a tag. The finder answers a few hints, you confirm, then release the
-              reward when it feels right.
+              bounty when it feels right.
             </p>
             <ul className="mt-4 space-y-2 text-sm">
               <li>• Great for jewelry, sunglasses, bags without tags</li>

@@ -44,6 +44,16 @@ export function parseField(value: string): bigint | null {
   }
 }
 
+export function parseSecretInput(value: string): bigint | null {
+  const clean = value.trim();
+  if (!clean || clean === "0x") return null;
+  try {
+    return BigInt(clean);
+  } catch {
+    return toFieldFromText(clean);
+  }
+}
+
 export async function poseidonHash(inputs: bigint[]): Promise<bigint> {
   const poseidon = await getPoseidon();
   const result = poseidon(inputs);
