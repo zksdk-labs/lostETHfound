@@ -1,0 +1,28 @@
+{
+  "name": "lostethfound",
+  "version": "1.0.0",
+  "description": "This repo contains a two-lane MVP: - Trustless lane: on-chain commitment + ZK proof of knowledge of a secret - Assisted lane: owner-mediated Q/A + encrypted contact",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "zk:build": "bash scripts/build-zk.sh",
+    "zk:clean": "bash scripts/clean-zk.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.0",
+    "snarkjs": "^0.7.5",
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
+    "create-next-app": "^14.2.5"
+  }
+}
