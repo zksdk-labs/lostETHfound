@@ -24,5 +24,8 @@
     "circomlib": "^2.0.5",
     "circomlibjs": "^0.1.7",
     "create-next-app": "^14.2.5"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0"
   }
 }

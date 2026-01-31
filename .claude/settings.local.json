@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "mcp__plugin_crew_octocode__localViewStructure"
+      "mcp__plugin_crew_octocode__localViewStructure",
+      "Bash(npx hardhat test)",
+      "Bash(bun add:*)",
+      "Bash(npx hardhat:*)",
+      "Bash(bun test)",
+      "Bash(circom:*)",
+      "Bash(bash:*)"
     ]
   }
 }

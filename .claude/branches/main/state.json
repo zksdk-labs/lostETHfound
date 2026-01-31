@@ -1,7 +1,7 @@
 {
   "branch": "main",
   "session": "unknown",
-  "compacted_at": "2026-01-28T12:40:45Z",
+  "compacted_at": "2026-01-28T14:29:24Z",
   "workflow": {
     "phase": "idle",
     "active": "",
@@ -25,8 +25,8 @@
     "next": "000-pending-p1-found-commit-wip-changes.md"
   },
   "uncommitted": {
-    "count": 8,
-    "wip_task_created": true
+    "count": 10,
+    "wip_task_created": false
   },
   "handoff": {
     "count": 0,
