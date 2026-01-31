@@ -350,8 +350,9 @@ describe("LostETHFound", function () {
         [0, 0],
       ];
       const pC = [0, 0];
-      // publicSignals: [answerHashes[5], threshold, packId, valid]
+      // publicSignals: [valid, answerHashes[5], threshold, packId] (snarkjs order)
       const publicSignals = [
+        1n, // valid = 1 (threshold met)
         BigInt(answerHashes[0]),
         BigInt(answerHashes[1]),
         BigInt(answerHashes[2]),
@@ -359,7 +360,6 @@ describe("LostETHFound", function () {
         BigInt(answerHashes[4]),
         BigInt(threshold),
         BigInt(packId),
-        1n, // valid = 1 (threshold met)
       ];
 
       const finderBalanceBefore = await ethers.provider.getBalance(
@@ -414,8 +414,9 @@ describe("LostETHFound", function () {
         [0, 0],
       ];
       const pC = [0, 0];
-      // valid = 0 (threshold not met)
+      // valid = 0 (threshold not met) - snarkjs order: [valid, hashes..., threshold, packId]
       const publicSignals = [
+        0n, // valid = 0
         BigInt(answerHashes[0]),
         BigInt(answerHashes[1]),
         BigInt(answerHashes[2]),
@@ -423,7 +424,6 @@ describe("LostETHFound", function () {
         BigInt(answerHashes[4]),
         BigInt(threshold),
         BigInt(packId),
-        0n, // valid = 0
       ];
 
       await expect(

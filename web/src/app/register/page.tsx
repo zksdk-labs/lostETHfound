@@ -611,7 +611,8 @@ export default function RegisterPage() {
                   ? formatHex(packId)
                   : "—"}
               </p>
-              {(commitment || packId) && (
+              {((mode === "tagged" && commitment) ||
+                (mode === "untagged" && packId)) && (
                 <p className="mt-2 break-all font-mono text-[10px] text-[var(--muted)]">
                   bytes32:{" "}
                   {toBytes32(mode === "tagged" ? commitment! : packId!)}

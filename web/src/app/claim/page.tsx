@@ -131,6 +131,8 @@ export default function ClaimPage() {
         categoryId: catId.toString(),
         itemIdSalt: itemSalt.toString(),
         claimId: claimId.toString(),
+        commitment: nextCommitment.toString(),
+        nullifier: nextNullifier.toString(),
       };
 
       const { proof, publicSignals } = await groth16.fullProve(

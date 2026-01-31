@@ -7,7 +7,21 @@
       "Bash(npx hardhat:*)",
       "Bash(bun test)",
       "Bash(circom:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(node:*)",
+      "Bash(ls:*)",
+      "Bash(timeout 15 bun dev:*)",
+      "Bash(pkill:*)",
+      "Bash(bun next build:*)",
+      "Bash(curl:*)",
+      "Bash(bun install)",
+      "Bash(bun dev:*)",
+      "mcp__plugin_compound-engineering_pw__browser_navigate",
+      "mcp__plugin_compound-engineering_pw__browser_click",
+      "mcp__plugin_compound-engineering_pw__browser_type",
+      "mcp__plugin_compound-engineering_pw__browser_console_messages",
+      "mcp__plugin_compound-engineering_pw__browser_take_screenshot",
+      "mcp__plugin_compound-engineering_pw__browser_close"
     ]
   }
 }

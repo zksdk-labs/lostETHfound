@@ -193,7 +193,7 @@ contract LostETHFound is ERC721 {
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
         uint256[2] calldata pC,
-        uint256[8] calldata publicSignals // answerHashes[5], threshold, packId, valid
+        uint256[8] calldata publicSignals // valid, answerHashes[5], threshold, packId (snarkjs order)
     ) external {
         require(address(questionVerifier) != address(0), "question verifier not set");
 
@@ -207,16 +207,16 @@ contract LostETHFound is ERC721 {
         bool ok = questionVerifier.verifyProof(pA, pB, pC, publicSignals);
         require(ok, "invalid proof");
 
-        // Check that valid == 1 (threshold met)
-        require(publicSignals[7] == 1, "threshold not met");
+        // Check that valid == 1 (threshold met) - valid is at index 0 in snarkjs output
+        require(publicSignals[0] == 1, "threshold not met");
 
-        // Verify proof is for THIS item's answer hashes
+        // Verify proof is for THIS item's answer hashes (indices 1-5 in snarkjs output)
         require(item.answerHashes.length == 5, "invalid answer count");
         for (uint256 i = 0; i < 5; i++) {
-            require(publicSignals[i] == uint256(item.answerHashes[i]), "answer hash mismatch");
+            require(publicSignals[i + 1] == uint256(item.answerHashes[i]), "answer hash mismatch");
         }
-        require(publicSignals[5] == item.threshold, "threshold mismatch");
-        require(publicSignals[6] == uint256(packId), "packId mismatch");
+        require(publicSignals[6] == item.threshold, "threshold mismatch");
+        require(publicSignals[7] == uint256(packId), "packId mismatch");
 
         item.status = Status.Returned;
         item.finder = msg.sender;
