@@ -34,5 +34,13 @@ module.exports = {
           },
         }
       : {}),
+    ...(process.env.DEPLOYER_PRIVATE_KEY
+      ? {
+          baseSepolia: {
+            url: "https://sepolia.base.org",
+            accounts: [process.env.DEPLOYER_PRIVATE_KEY],
+          },
+        }
+      : {}),
   },
 };

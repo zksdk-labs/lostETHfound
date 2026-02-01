@@ -16,12 +16,6 @@ export function Nav() {
         </Link>
         <Link
           className="rounded-full border border-black/15 px-4 py-2 hover:border-black/40"
-          href="/lost"
-        >
-          Report Lost
-        </Link>
-        <Link
-          className="rounded-full border border-black/15 px-4 py-2 hover:border-black/40"
           href="/claim"
         >
           Report Found

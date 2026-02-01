@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Nav } from "@/components/Nav";
 import { Chat } from "@/components/Chat";
 import {
@@ -9,8 +9,17 @@ import {
   getStatusLabel,
   getStatusColor,
 } from "@/lib/contracts";
+import { itemCategories } from "@/lib/categories";
+import { categoryIdFromLabel, toBytes32 } from "@/lib/zk";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
-import { parseAbiItem, formatEther, parseEther } from "viem";
+import {
+  parseAbiItem,
+  formatEther,
+  parseEther,
+  createPublicClient,
+  http,
+} from "viem";
+import { baseSepolia } from "wagmi/chains";
 
 interface OwnedItem {
   tokenId: bigint;
@@ -18,6 +27,10 @@ interface OwnedItem {
   reward: bigint;
   finder: string;
   isTagged: boolean;
+  categoryId: string;
+  categoryLabel: string;
+  threshold: number;
+  imageUri: string;
 }
 
 export default function DashboardPage() {
@@ -33,8 +46,19 @@ export default function DashboardPage() {
   );
 
   const { address } = useAccount();
-  const publicClient = usePublicClient();
   const { writeContractAsync, isPending } = useWriteContract();
+
+  // Use dedicated Base Sepolia client for reads (memoized to prevent infinite loops)
+  const publicClient = useMemo(
+    () =>
+      createPublicClient({
+        chain: baseSepolia,
+        transport: http(
+          process.env.NEXT_PUBLIC_RPC_URL || "https://sepolia.base.org"
+        ),
+      }),
+    []
+  );
 
   // Fetch owned items
   useEffect(() => {
@@ -46,6 +70,15 @@ export default function DashboardPage() {
     const fetchItems = async () => {
       setLoading(true);
       try {
+        // Build category lookup map
+        const categoryMap = new Map<string, string>();
+        for (const cat of itemCategories) {
+          if (cat.value !== "other") {
+            const id = await categoryIdFromLabel(cat.value);
+            categoryMap.set(toBytes32(id), cat.label);
+          }
+        }
+
         // Get all ItemRegistered events where owner is current address
         const event = parseAbiItem(
           "event ItemRegistered(uint256 indexed tokenId, address indexed owner, bytes32 indexed commitment, bytes32 categoryId, uint256 reward, bool isTagged)"
@@ -92,12 +125,40 @@ export default function DashboardPage() {
               string
             ];
 
+            const categoryIdHex = itemData[1] as string;
+            const categoryLabel = categoryMap.get(categoryIdHex) || "Custom";
+
+            // Fetch tokenURI for the SVG image
+            let imageUri = "";
+            try {
+              const tokenUri = (await publicClient.readContract({
+                address: contractAddress as `0x${string}`,
+                abi: lostETHFoundAbi,
+                functionName: "tokenURI",
+                args: [tokenId],
+              })) as string;
+
+              // Decode base64 JSON to extract image
+              const jsonBase64 = tokenUri.replace(
+                "data:application/json;base64,",
+                ""
+              );
+              const json = JSON.parse(atob(jsonBase64));
+              imageUri = json.image || "";
+            } catch {
+              // tokenURI might fail for some items
+            }
+
             ownedItems.push({
               tokenId,
               status: itemData[4],
               reward: itemData[3],
               finder: itemData[5],
               isTagged: itemData[6],
+              categoryId: categoryIdHex,
+              categoryLabel,
+              threshold: itemData[2],
+              imageUri,
             });
           } catch {
             // Item may have been transferred or burned
@@ -235,13 +296,24 @@ export default function DashboardPage() {
               {items.map((item) => (
                 <div
                   key={item.tokenId.toString()}
-                  className="rounded-2xl border border-black/10 bg-white/80 p-5"
+                  className="overflow-hidden rounded-2xl border border-black/10 bg-white/80"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
+                  <div className="flex flex-col md:flex-row">
+                    {/* NFT Image */}
+                    {item.imageUri && (
+                      <div className="md:w-48 flex-shrink-0 bg-gradient-to-br from-slate-900 to-slate-800 p-4">
+                        <img
+                          src={item.imageUri}
+                          alt={`Item #${item.tokenId.toString()}`}
+                          className="w-full rounded-lg shadow-lg"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex-1 p-5">
                       <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold">
-                          Item #{item.tokenId.toString()}
+                        <h3 className="text-xl font-semibold">
+                          {item.categoryLabel}
                         </h3>
                         <span
                           className={`rounded-full border px-3 py-1 text-xs font-medium ${getStatusColor(
@@ -250,92 +322,130 @@ export default function DashboardPage() {
                         >
                           {getStatusLabel(item.status)}
                         </span>
-                        <span className="text-xs text-[var(--muted)]">
-                          {item.isTagged ? "Tagged" : "Question-based"}
-                        </span>
                       </div>
-                      <p className="mt-2 text-sm text-[var(--muted)]">
-                        Current bounty: {formatEther(item.reward)} ETH
-                      </p>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                            Token
+                          </p>
+                          <p className="font-medium">
+                            #{item.tokenId.toString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                            Type
+                          </p>
+                          <p className="font-medium">
+                            {item.isTagged ? "Tagged" : "Question-based"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                            Threshold
+                          </p>
+                          <p className="font-medium">
+                            {item.threshold} of 5 correct
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                            Bounty
+                          </p>
+                          <p className="font-medium text-green-600">
+                            {formatEther(item.reward)} ETH
+                          </p>
+                        </div>
+                      </div>
+
                       {item.finder &&
                         item.finder !==
                           "0x0000000000000000000000000000000000000000" && (
-                          <p className="mt-1 text-sm text-[var(--muted)]">
-                            Finder: {item.finder.slice(0, 6)}...
-                            {item.finder.slice(-4)}
-                          </p>
+                          <div className="mt-3">
+                            <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                              Finder
+                            </p>
+                            <p className="font-mono text-sm">
+                              {item.finder.slice(0, 6)}...
+                              {item.finder.slice(-4)}
+                            </p>
+                          </div>
                         )}
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Active -> Lost */}
-                      {item.status === ItemStatus.Active && (
-                        <button
-                          type="button"
-                          onClick={() => handleMarkAsLost(item.tokenId)}
-                          disabled={isPending}
-                          className="rounded-full border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                        >
-                          Mark as Lost
-                        </button>
-                      )}
-
-                      {/* Lost -> Active */}
-                      {item.status === ItemStatus.Lost && (
-                        <>
+                      {/* Actions */}
+                      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-black/5 pt-4">
+                        {/* Active -> Lost */}
+                        {item.status === ItemStatus.Active && (
                           <button
                             type="button"
-                            onClick={() => handleMarkAsActive(item.tokenId)}
+                            onClick={() => handleMarkAsLost(item.tokenId)}
                             disabled={isPending}
-                            className="rounded-full border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                            className="rounded-full border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
                           >
-                            Mark as Found
+                            Mark as Lost
                           </button>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="ETH"
-                              value={
-                                bountyAmounts[item.tokenId.toString()] || ""
-                              }
-                              onChange={(e) =>
-                                setBountyAmounts((prev) => ({
-                                  ...prev,
-                                  [item.tokenId.toString()]: e.target.value,
-                                }))
-                              }
-                              className="w-20 rounded-xl border border-black/15 bg-white px-3 py-2 text-sm"
-                            />
+                        )}
+
+                        {/* Lost -> Active */}
+                        {item.status === ItemStatus.Lost && (
+                          <>
                             <button
                               type="button"
-                              onClick={() => handleActivateBounty(item.tokenId)}
+                              onClick={() => handleMarkAsActive(item.tokenId)}
                               disabled={isPending}
-                              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50"
+                              className="rounded-full border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
                             >
-                              Add Bounty
+                              Mark as Found
                             </button>
-                          </div>
-                        </>
-                      )}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="ETH"
+                                value={
+                                  bountyAmounts[item.tokenId.toString()] || ""
+                                }
+                                onChange={(e) =>
+                                  setBountyAmounts((prev) => ({
+                                    ...prev,
+                                    [item.tokenId.toString()]: e.target.value,
+                                  }))
+                                }
+                                className="w-20 rounded-xl border border-black/15 bg-white px-3 py-2 text-sm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleActivateBounty(item.tokenId)
+                                }
+                                disabled={isPending}
+                                className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50"
+                              >
+                                Add Bounty
+                              </button>
+                            </div>
+                          </>
+                        )}
 
-                      {/* Found -> Confirm Return */}
-                      {item.status === ItemStatus.Found && (
-                        <button
-                          type="button"
-                          onClick={() => handleConfirmReturn(item.tokenId)}
-                          disabled={isPending}
-                          className="rounded-full bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
-                        >
-                          Confirm Return & Pay Reward
-                        </button>
-                      )}
+                        {/* Found -> Confirm Return */}
+                        {item.status === ItemStatus.Found && (
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmReturn(item.tokenId)}
+                            disabled={isPending}
+                            className="rounded-full bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
+                          >
+                            Confirm Return & Pay Reward
+                          </button>
+                        )}
 
-                      {/* Returned - no actions */}
-                      {item.status === ItemStatus.Returned && (
-                        <span className="text-sm text-green-600">
-                          Successfully returned
-                        </span>
-                      )}
+                        {/* Returned - no actions */}
+                        {item.status === ItemStatus.Returned && (
+                          <span className="text-sm text-green-600">
+                            Successfully returned
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -396,6 +506,12 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+
+          {/* Placeholder for "no tag" flow */}
+          <p className="mt-6 text-center text-xs text-[var(--muted)]">
+            Lost an item without a return tag?{" "}
+            <span className="opacity-60">Report Lost Item coming soon.</span>
+          </p>
         </section>
       </main>
     </div>

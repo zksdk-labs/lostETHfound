@@ -14,8 +14,8 @@ export default function Home() {
             Lost something? Report it. Found something? Return it.
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-[var(--muted)]">
-            Open to anyone, verifiable on Ethereum. Your personal details never go on‑chain—only a
-            proof that you own it.
+            Open to anyone, verifiable on Ethereum. Your personal details never
+            go on‑chain—only a proof that you own it.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
@@ -23,12 +23,6 @@ export default function Home() {
               className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black shadow-glow"
             >
               Add a Return Tag
-            </Link>
-            <Link
-              href="/lost"
-              className="rounded-full border border-black/20 px-6 py-3 text-sm font-semibold"
-            >
-              Report lost
             </Link>
             <Link
               href="/claim"
@@ -49,20 +43,23 @@ export default function Home() {
           <div className="rounded-3xl border border-black/10 bg-white/60 p-6 backdrop-blur">
             <h2 className="text-xl font-semibold">Fast return (return tag)</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Add a return tag before you lose the item. A finder can prove they saw it and receive
-              the bounty instantly, without learning anything else about you.
+              Add a return tag before you lose the item. A finder can prove they
+              saw it and receive the bounty instantly, without learning anything
+              else about you.
             </p>
             <ul className="mt-4 space-y-2 text-sm">
               <li>• Perfect for MacBooks, phones, tagged cards</li>
-              <li>• Works with a serial code, sticker, sleeve tag, or short phrase</li>
+              <li>
+                • Works with a serial code, sticker, sleeve tag, or short phrase
+              </li>
               <li>• One‑time return, no personal data on‑chain</li>
             </ul>
           </div>
           <div className="rounded-3xl border border-black/10 bg-white/60 p-6 backdrop-blur">
             <h2 className="text-xl font-semibold">Owner‑verified (no code)</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              For items without a tag. The finder answers a few hints, you confirm, then release the
-              bounty when it feels right.
+              For items without a tag. The finder answers a few hints, you
+              confirm, then release the bounty when it feels right.
             </p>
             <ul className="mt-4 space-y-2 text-sm">
               <li>• Great for jewelry, sunglasses, bags without tags</li>

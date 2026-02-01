@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Nav } from "@/components/Nav";
 import {
   categoryIdFromLabel,
@@ -40,6 +40,7 @@ export default function RegisterPage() {
   const [categoryId, setCategoryId] = useState<bigint | null>(null);
   const [commitment, setCommitment] = useState<bigint | null>(null);
   const [status, setStatus] = useState<string>("");
+  const [loadingStep, setLoadingStep] = useState<string>("");
   const [copyStatus, setCopyStatus] = useState("");
 
   // Question state
@@ -52,6 +53,18 @@ export default function RegisterPage() {
   const questions = getQuestionsForCategory(categoryChoice);
   const { address } = useAccount();
   const { writeContractAsync, isPending } = useWriteContract();
+
+  // Auto-compute commitment when all required fields are filled
+  useEffect(() => {
+    computeCommitmentIfReady();
+  }, [
+    secretInput,
+    resolvedCategory,
+    answers,
+    threshold,
+    contactInfo,
+    itemSaltInput,
+  ]);
 
   const buildSerialCode = () => {
     const bytes = new Uint8Array(15);
@@ -106,31 +119,17 @@ export default function RegisterPage() {
     setAnswers(newAnswers);
   };
 
-  const handleCompute = async () => {
-    setStatus("");
+  const computeCommitmentIfReady = async () => {
     const secret = parseSecretInput(secretInput);
-    if (secret === null) {
-      setStatus("Generate or enter a valid return code.");
-      return;
-    }
-    if (!resolvedCategory) {
-      setStatus("Choose an item type or enter a custom one.");
-      return;
-    }
+    if (secret === null) return;
+    if (!resolvedCategory) return;
 
     const filledAnswers = answers.filter((a) => a.trim());
-    if (filledAnswers.length < threshold) {
-      setStatus(`Answer at least ${threshold} questions.`);
-      return;
-    }
+    if (filledAnswers.length < threshold) return;
 
-    if (!contactInfo.trim()) {
-      setStatus("Enter your contact info for when the item is found.");
-      return;
-    }
+    if (!contactInfo.trim()) return;
 
     const itemSalt = parseField(itemSaltInput) ?? 0n;
-    setStatus("Computing commitment and answer hashes...");
 
     const nextCategoryId = await categoryIdFromLabel(resolvedCategory);
     const nextCommitment = await commitmentFrom(
@@ -141,17 +140,52 @@ export default function RegisterPage() {
 
     setCategoryId(nextCategoryId);
     setCommitment(nextCommitment);
-    setStatus("Ready to mint ownership NFT.");
   };
 
   const handleRegister = async () => {
-    if (!commitment || !categoryId || !contractAddress) {
-      setStatus("Compute commitment first.");
+    setStatus("");
+
+    // Validate all required fields
+    const secret = parseSecretInput(secretInput);
+    if (secret === null) {
+      setStatus("Generate or enter a valid return code.");
+      return;
+    }
+    if (!resolvedCategory) {
+      setStatus("Choose an item type or enter a custom one.");
+      return;
+    }
+    const filledAnswers = answers.filter((a) => a.trim());
+    if (filledAnswers.length < threshold) {
+      setStatus(`Answer at least ${threshold} questions.`);
+      return;
+    }
+    if (!contactInfo.trim()) {
+      setStatus("Enter your contact info for when the item is found.");
+      return;
+    }
+    if (!contractAddress) {
+      setStatus("Contract address not configured.");
       return;
     }
 
     try {
-      setStatus("Computing answer hashes and encrypting data...");
+      setLoadingStep("Preparing...");
+
+      // Compute commitment if not already computed
+      let currentCommitment = commitment;
+      let currentCategoryId = categoryId;
+      if (!currentCommitment || !currentCategoryId) {
+        const itemSalt = parseField(itemSaltInput) ?? 0n;
+        currentCategoryId = await categoryIdFromLabel(resolvedCategory);
+        currentCommitment = await commitmentFrom(
+          secret,
+          currentCategoryId,
+          itemSalt
+        );
+        setCategoryId(currentCategoryId);
+        setCommitment(currentCommitment);
+      }
 
       // Compute answer hashes
       const answerHashes = await computeAnswerHashes(answers);
@@ -166,15 +200,15 @@ export default function RegisterPage() {
       const contactBytes = stringToHex(encryptedData);
       const rewardWei = parseEther(rewardEth || "0");
 
-      setStatus("Minting ownership NFT...");
+      setLoadingStep("Approve in wallet...");
 
       await writeContractAsync({
         address: contractAddress as `0x${string}`,
         abi: lostETHFoundAbi,
         functionName: "registerItem",
         args: [
-          toBytes32(commitment),
-          toBytes32(categoryId),
+          toBytes32(currentCommitment),
+          toBytes32(currentCategoryId),
           answerHashBytes,
           threshold,
           contactBytes as `0x${string}`,
@@ -182,11 +216,13 @@ export default function RegisterPage() {
         value: rewardWei,
       });
 
+      setLoadingStep("");
       setStatus(
-        "Ownership NFT minted! Put the return code on your item. When someone finds it, they'll use the code to look up your item and answer the questions to prove they have it."
+        "Item registered! Put the return code on your item. When someone finds it, they'll use the code to look up your item and answer the questions to prove they have it."
       );
     } catch (error) {
-      setStatus(`Mint failed: ${String(error)}`);
+      setLoadingStep("");
+      setStatus(`Registration failed: ${String(error)}`);
     }
   };
 
@@ -195,7 +231,7 @@ export default function RegisterPage() {
       <Nav />
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 pb-20">
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-8 shadow-glow backdrop-blur">
-          <h1 className="text-3xl font-semibold">Register Your Item</h1>
+          <h1 className="text-3xl font-semibold">Add a Return Tag</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
             Create a return tag for your item. The code identifies it on-chain,
             and the questions prove a finder actually has it.
@@ -393,22 +429,15 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="mt-8 ml-9 grid gap-3 md:grid-cols-2">
+          {/* Action Button */}
+          <div className="mt-8 ml-9">
             <button
               type="button"
-              className="w-full rounded-full border border-black/20 px-6 py-3 text-sm font-semibold"
-              onClick={handleCompute}
-            >
-              Compute Commitment
-            </button>
-            <button
-              type="button"
-              disabled={!address || !commitment || isPending}
-              className="w-full rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!address || isPending || !!loadingStep}
+              className="w-full rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
               onClick={handleRegister}
             >
-              {isPending ? "Minting..." : "Mint Ownership NFT"}
+              {loadingStep || "Get Ownership Badge"}
             </button>
           </div>
 

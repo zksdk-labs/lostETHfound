@@ -595,7 +595,7 @@ contract LostETHFound is ERC721 {
         bytes memory hexChars = "0123456789abcdef";
 
         // Build "0x" + first 4 chars + "..." + last 4 chars
-        bytes memory result = new bytes(15); // 0x + 4 + ... + 4 = 15
+        bytes memory result = new bytes(13); // 0x + 4 + ... + 4 = 13
         result[0] = "0";
         result[1] = "x";
 

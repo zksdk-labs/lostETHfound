@@ -37,7 +37,8 @@
       "mcp__plugin_crew_octocode__githubGetFileContent",
       "mcp__plugin_crew_octocode__githubSearchCode",
       "Bash(bun run lint:*)",
-      "Bash(bun remove:*)"
+      "Bash(bun remove:*)",
+      "Bash(bunx hardhat:*)"
     ]
   }
 }
