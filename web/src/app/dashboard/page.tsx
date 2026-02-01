@@ -11,7 +11,7 @@ import {
 } from "@/lib/contracts";
 import { itemCategories } from "@/lib/categories";
 import { categoryIdFromLabel, toBytes32 } from "@/lib/zk";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, useWriteContract } from "wagmi";
 import {
   parseAbiItem,
   formatEther,
