@@ -36,7 +36,35 @@ export const lostETHFoundAbi = [
     outputs: [{ name: "", type: "address" }],
   },
 
-  // ============ TAGGED FLOW ============
+  // ============ MAIN FLOW: Return Code + Questions ============
+  {
+    type: "function",
+    name: "registerItem",
+    stateMutability: "payable",
+    inputs: [
+      { name: "commitment", type: "bytes32" },
+      { name: "categoryId", type: "bytes32" },
+      { name: "answerHashes", type: "bytes32[]" },
+      { name: "threshold", type: "uint8" },
+      { name: "encryptedContact", type: "bytes" },
+    ],
+    outputs: [{ name: "tokenId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "claimItem",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "commitment", type: "bytes32" },
+      { name: "pA", type: "uint256[2]" },
+      { name: "pB", type: "uint256[2][2]" },
+      { name: "pC", type: "uint256[2]" },
+      { name: "publicSignals", type: "uint256[8]" },
+    ],
+    outputs: [],
+  },
+
+  // ============ LEGACY: Tagged-only flow ============
   {
     type: "function",
     name: "registerTagged",
@@ -63,7 +91,7 @@ export const lostETHFoundAbi = [
     outputs: [],
   },
 
-  // ============ UNTAGGED FLOW ============
+  // ============ LEGACY: Untagged flow ============
   {
     type: "function",
     name: "registerUntagged",
@@ -116,6 +144,20 @@ export const lostETHFoundAbi = [
   {
     type: "function",
     name: "withdrawReward",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "activateBounty",
+    stateMutability: "payable",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "confirmReturn",
     stateMutability: "nonpayable",
     inputs: [{ name: "tokenId", type: "uint256" }],
     outputs: [],
@@ -185,6 +227,23 @@ export const lostETHFoundAbi = [
     inputs: [{ name: "", type: "bytes32" }],
     outputs: [{ name: "", type: "bool" }],
   },
+  {
+    type: "function",
+    name: "items",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [
+      { name: "commitment", type: "bytes32" },
+      { name: "categoryId", type: "bytes32" },
+      { name: "answerHashes", type: "bytes32[]" },
+      { name: "threshold", type: "uint8" },
+      { name: "reward", type: "uint256" },
+      { name: "status", type: "uint8" },
+      { name: "finder", type: "address" },
+      { name: "isTagged", type: "bool" },
+      { name: "encryptedContact", type: "bytes" },
+    ],
+  },
 
   // ============ EVENTS ============
   {
@@ -235,6 +294,34 @@ export const lostETHFoundAbi = [
   },
   {
     type: "event",
+    name: "BountyActivated",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "FoundPending",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "finder", type: "address", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ReturnConfirmed",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "finder", type: "address", indexed: false },
+      { name: "reward", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
     name: "Transfer",
     inputs: [
       { name: "from", type: "address", indexed: true },
@@ -249,7 +336,8 @@ export const lostETHFoundAbi = [
 export const ItemStatus = {
   Active: 0,
   Lost: 1,
-  Returned: 2,
+  Found: 2,
+  Returned: 3,
 } as const;
 
 export type ItemStatusType = (typeof ItemStatus)[keyof typeof ItemStatus];
@@ -260,9 +348,26 @@ export function getStatusLabel(status: number): string {
       return "Active";
     case ItemStatus.Lost:
       return "Lost";
+    case ItemStatus.Found:
+      return "Found";
     case ItemStatus.Returned:
       return "Returned";
     default:
       return "Unknown";
+  }
+}
+
+export function getStatusColor(status: number): string {
+  switch (status) {
+    case ItemStatus.Active:
+      return "text-blue-600 bg-blue-50 border-blue-200";
+    case ItemStatus.Lost:
+      return "text-red-600 bg-red-50 border-red-200";
+    case ItemStatus.Found:
+      return "text-orange-600 bg-orange-50 border-orange-200";
+    case ItemStatus.Returned:
+      return "text-green-600 bg-green-50 border-green-200";
+    default:
+      return "text-gray-600 bg-gray-50 border-gray-200";
   }
 }

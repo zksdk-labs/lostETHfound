@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Nav } from "@/components/Nav";
-import { DEFAULT_CATEGORY, itemCategories, resolveCategoryLabel } from "@/lib/categories";
+import {
+  DEFAULT_CATEGORY,
+  itemCategories,
+  resolveCategoryLabel,
+} from "@/lib/categories";
 import {
   categoryIdFromLabel,
   commitmentFrom,
@@ -14,7 +18,7 @@ import {
 } from "@/lib/zk";
 import { lostETHFoundAbi } from "@/lib/contracts";
 import { usePublicClient, useReadContract, useWriteContract } from "wagmi";
-import { formatEther, parseAbiItem, stringToHex, zeroAddress } from "viem";
+import { formatEther, parseAbiItem, zeroAddress } from "viem";
 
 type FlowMode = "tag" | "noTag";
 type FoundReport = {
@@ -26,7 +30,8 @@ type FoundReport = {
 
 export default function LostPage() {
   const [mode, setMode] = useState<FlowMode>("tag");
-  const [categoryChoice, setCategoryChoice] = useState(DEFAULT_CATEGORY);
+  const [categoryChoice, setCategoryChoice] =
+    useState<string>(DEFAULT_CATEGORY);
   const [customCategory, setCustomCategory] = useState("");
   const [secretInput, setSecretInput] = useState("");
   const [itemSaltInput, setItemSaltInput] = useState("0");
@@ -48,16 +53,30 @@ export default function LostPage() {
   const resolvedCategory = resolveCategoryLabel(categoryChoice, customCategory);
   const commitmentBytes = commitment ? toBytes32(commitment) : null;
   const publicClient = usePublicClient();
-  const { writeContractAsync, isPending } = useWriteContract();
-  const deploymentBlock = BigInt(process.env.NEXT_PUBLIC_DEPLOYMENT_BLOCK || "0");
+  const { isPending } = useWriteContract();
+  const deploymentBlock = BigInt(
+    process.env.NEXT_PUBLIC_DEPLOYMENT_BLOCK || "0"
+  );
 
-  const { data: itemData, isFetching } = useReadContract({
+  // First get tokenId from commitment
+  const { data: tokenId } = useReadContract({
     address: contractAddress ? (contractAddress as `0x${string}`) : undefined,
     abi: lostETHFoundAbi,
-    functionName: "items",
+    functionName: "byCommitment",
     args: commitmentBytes ? [commitmentBytes] : undefined,
     query: {
       enabled: Boolean(contractAddress && commitmentBytes),
+    },
+  });
+
+  // Then get item data using tokenId
+  const { data: itemData, isFetching } = useReadContract({
+    address: contractAddress ? (contractAddress as `0x${string}`) : undefined,
+    abi: lostETHFoundAbi,
+    functionName: "getItem",
+    args: tokenId ? [tokenId] : undefined,
+    query: {
+      enabled: Boolean(contractAddress && tokenId && tokenId > 0n),
     },
   });
 
@@ -69,29 +88,49 @@ export default function LostPage() {
       setTagStatus("Checking the registry...");
       return;
     }
-    if (!itemData) {
-      return;
-    }
-    const [owner, , reward, claimed] = itemData as [
-      `0x${string}`,
-      `0x${string}`,
-      bigint,
-      boolean,
-    ];
-
-    if (owner === zeroAddress) {
+    if (!tokenId || tokenId === 0n) {
       setTagStatus("No registry entry yet. Post your return tag first.");
       return;
     }
+    if (!itemData) {
+      return;
+    }
+    // getItem returns: commitment, categoryId, threshold, reward, status, finder, isTagged, encryptedContact
+    const itemDataArr = itemData as [
+      `0x${string}`,
+      `0x${string}`,
+      number,
+      bigint,
+      number,
+      `0x${string}`,
+      boolean,
+      `0x${string}`
+    ];
+    const reward = itemDataArr[3];
+    const status = itemDataArr[4];
+    const finder = itemDataArr[5];
 
-    if (claimed) {
-      setTagStatus("A finder has submitted a claim. Check your wallet for the bounty transfer.");
+    // Status: 0=Active, 1=Lost, 2=Found, 3=Returned
+    if (status === 3) {
+      setTagStatus(
+        "Item has been returned. Check your wallet for the bounty transfer."
+      );
       return;
     }
 
-    const bounty = reward > 0n ? `${formatEther(reward)} ETH bounty` : "No bounty set";
-    setTagStatus(`Registered. No claim yet. ${bounty}.`);
-  }, [commitment, isFetching, itemData]);
+    if (status === 2 && finder !== zeroAddress) {
+      setTagStatus(
+        "A finder has claimed this item. Confirm the return in your dashboard."
+      );
+      return;
+    }
+
+    const bounty =
+      reward > 0n ? `${formatEther(reward)} ETH bounty` : "No bounty set";
+    const statusLabel =
+      status === 0 ? "Active" : status === 1 ? "Lost" : "Found";
+    setTagStatus(`Registered (${statusLabel}). ${bounty}.`);
+  }, [commitment, isFetching, itemData, tokenId]);
 
   const handleCheckTag = async () => {
     setTagStatus("");
@@ -111,57 +150,21 @@ export default function LostPage() {
 
     const itemSalt = parseField(itemSaltInput) ?? 0n;
     const nextCategoryId = await categoryIdFromLabel(resolvedCategory);
-    const nextCommitment = await commitmentFrom(secret, nextCategoryId, itemSalt);
+    const nextCommitment = await commitmentFrom(
+      secret,
+      nextCategoryId,
+      itemSalt
+    );
     setCommitment(nextCommitment);
     setTagStatus("Checking the registry...");
   };
 
   const handlePost = async () => {
-    if (!resolvedCategory) {
-      setStatus("Choose an item type or enter a custom one.");
-      return;
-    }
-    if (!contractAddress) {
-      setStatus("Enter the registry contract address.");
-      return;
-    }
-
-    try {
-      setStatus("Sending lost report...");
-      const catId = await categoryIdFromLabel(resolvedCategory);
-      const contactBytes = contact.trim()
-        ? contact.trim().startsWith("0x")
-          ? contact.trim()
-          : stringToHex(contact.trim())
-        : "0x";
-
-      const hintsPayload = JSON.stringify(
-        {
-          color: hintColor.trim(),
-          location: hintLocation.trim(),
-          time: hintTime.trim(),
-          detail: hintDetail.trim(),
-        },
-        null,
-        0
-      );
-      const hintsBytes = hintsPayload.trim()
-        ? hintsPayload.trim().startsWith("0x")
-          ? hintsPayload.trim()
-          : stringToHex(hintsPayload.trim())
-        : "0x";
-
-      await writeContractAsync({
-        address: contractAddress as `0x${string}`,
-        abi: lostETHFoundAbi,
-        functionName: "reportLost",
-        args: [toBytes32(catId), contactBytes as `0x${string}`, hintsBytes as `0x${string}`],
-      });
-
-      setStatus("Lost report sent. Confirm in wallet.");
-    } catch (error) {
-      setStatus(`Report failed: ${String(error)}`);
-    }
+    // This feature (no-tag lost report) is not implemented in the current contract
+    // For now, redirect users to register an item first
+    setStatus(
+      "For items without a return tag, please register the item first at /register, then use the dashboard to mark it as lost."
+    );
   };
 
   const handleSearchFound = async () => {
@@ -223,15 +226,17 @@ export default function LostPage() {
         <section className="rounded-[28px] border border-black/10 bg-white/70 p-8 shadow-glow backdrop-blur">
           <h1 className="text-3xl font-semibold">Report a lost item</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            If the item already has a return tag, use it to check the registry. If it doesn’t, use
-            the owner‑verified flow with private hints.
+            If the item already has a return tag, use it to check the registry.
+            If it doesn’t, use the owner‑verified flow with private hints.
           </p>
 
           <div className="mt-6 inline-flex rounded-full border border-black/15 bg-white/80 p-1 text-sm">
             <button
               type="button"
               className={`rounded-full px-4 py-2 ${
-                mode === "tag" ? "bg-[var(--accent)] text-black" : "text-[var(--muted)]"
+                mode === "tag"
+                  ? "bg-[var(--accent)] text-black"
+                  : "text-[var(--muted)]"
               }`}
               onClick={() => setMode("tag")}
             >
@@ -240,7 +245,9 @@ export default function LostPage() {
             <button
               type="button"
               className={`rounded-full px-4 py-2 ${
-                mode === "noTag" ? "bg-[var(--accent)] text-black" : "text-[var(--muted)]"
+                mode === "noTag"
+                  ? "bg-[var(--accent)] text-black"
+                  : "text-[var(--muted)]"
               }`}
               onClick={() => setMode("noTag")}
             >
@@ -272,7 +279,9 @@ export default function LostPage() {
                     <input
                       className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
                       value={customCategory}
-                      onChange={(event) => setCustomCategory(event.target.value)}
+                      onChange={(event) =>
+                        setCustomCategory(event.target.value)
+                      }
                       placeholder="e.g. camera"
                     />
                   </label>
@@ -288,7 +297,8 @@ export default function LostPage() {
                   placeholder="Code from the tag"
                 />
                 <p className="text-xs text-[var(--muted)]">
-                  Use the code you placed on the item. We only check the on‑chain proof.
+                  Use the code you placed on the item. We only check the
+                  on‑chain proof.
                 </p>
               </label>
 
@@ -308,12 +318,16 @@ export default function LostPage() {
                 </Link>
               </div>
 
-              {tagStatus && <p className="text-sm text-[var(--muted)]">{tagStatus}</p>}
+              {tagStatus && (
+                <p className="text-sm text-[var(--muted)]">{tagStatus}</p>
+              )}
 
               {commitment && (
                 <div className="rounded-2xl border border-black/10 bg-white/80 p-4 text-xs">
                   <p className="text-[var(--muted)]">Commitment (internal)</p>
-                  <p className="mt-2 break-all font-mono">{formatHex(commitment)}</p>
+                  <p className="mt-2 break-all font-mono">
+                    {formatHex(commitment)}
+                  </p>
                   <p className="mt-2 break-all font-mono text-[10px] text-[var(--muted)]">
                     bytes32: {commitmentBytes}
                   </p>
@@ -321,14 +335,18 @@ export default function LostPage() {
               )}
 
               <details className="rounded-2xl border border-black/10 bg-white/80 p-4 text-sm">
-                <summary className="cursor-pointer font-semibold">Advanced</summary>
+                <summary className="cursor-pointer font-semibold">
+                  Advanced
+                </summary>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <label className="flex flex-col gap-2 text-sm">
                     Registry contract
                     <input
                       className="rounded-xl border border-black/15 bg-white/80 px-4 py-3 font-mono text-xs"
                       value={contractAddress}
-                      onChange={(event) => setContractAddress(event.target.value)}
+                      onChange={(event) =>
+                        setContractAddress(event.target.value)
+                      }
                       placeholder="0x..."
                     />
                   </label>
@@ -371,7 +389,9 @@ export default function LostPage() {
                     <input
                       className="rounded-xl border border-black/15 bg-white/80 px-4 py-3"
                       value={customCategory}
-                      onChange={(event) => setCustomCategory(event.target.value)}
+                      onChange={(event) =>
+                        setCustomCategory(event.target.value)
+                      }
                       placeholder="e.g. camera"
                     />
                   </label>
@@ -386,7 +406,8 @@ export default function LostPage() {
                     placeholder="0"
                   />
                   <p className="text-xs text-[var(--muted)]">
-                    For no-tag items, this is a pledge (not escrowed in the demo).
+                    For no-tag items, this is a pledge (not escrowed in the
+                    demo).
                   </p>
                 </label>
               </div>
@@ -400,7 +421,8 @@ export default function LostPage() {
                   placeholder="For demo: email or Telegram (use burner)."
                 />
                 <p className="text-xs text-[var(--muted)]">
-                  For the demo, you can paste contact info. In production this would be encrypted.
+                  For the demo, you can paste contact info. In production this
+                  would be encrypted.
                 </p>
               </label>
 
@@ -461,8 +483,12 @@ export default function LostPage() {
                 </button>
               </div>
 
-              {status && <p className="text-sm text-[var(--muted)]">{status}</p>}
-              {searchStatus && <p className="text-sm text-[var(--muted)]">{searchStatus}</p>}
+              {status && (
+                <p className="text-sm text-[var(--muted)]">{status}</p>
+              )}
+              {searchStatus && (
+                <p className="text-sm text-[var(--muted)]">{searchStatus}</p>
+              )}
 
               {foundReports.length > 0 && (
                 <div className="grid gap-3">
@@ -487,14 +513,18 @@ export default function LostPage() {
               )}
 
               <details className="rounded-2xl border border-black/10 bg-white/80 p-4 text-sm">
-                <summary className="cursor-pointer font-semibold">Advanced</summary>
+                <summary className="cursor-pointer font-semibold">
+                  Advanced
+                </summary>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <label className="flex flex-col gap-2 text-sm">
                     Registry contract
                     <input
                       className="rounded-xl border border-black/15 bg-white/80 px-4 py-3 font-mono text-xs"
                       value={contractAddress}
-                      onChange={(event) => setContractAddress(event.target.value)}
+                      onChange={(event) =>
+                        setContractAddress(event.target.value)
+                      }
                       placeholder="0x..."
                     />
                   </label>

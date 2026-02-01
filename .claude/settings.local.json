@@ -21,7 +21,23 @@
       "mcp__plugin_compound-engineering_pw__browser_type",
       "mcp__plugin_compound-engineering_pw__browser_console_messages",
       "mcp__plugin_compound-engineering_pw__browser_take_screenshot",
-      "mcp__plugin_compound-engineering_pw__browser_close"
+      "mcp__plugin_compound-engineering_pw__browser_close",
+      "Bash(bunx hardhat compile:*)",
+      "Bash(bun run build)",
+      "Bash(git stash:*)",
+      "Bash(bunx hardhat run:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(cast call:*)",
+      "mcp__plugin_compound-engineering_pw__browser_tabs",
+      "mcp__plugin_compound-engineering_pw__browser_snapshot",
+      "mcp__plugin_compound-engineering_pw__browser_wait_for",
+      "mcp__plugin_crew_octocode__packageSearch",
+      "mcp__plugin_crew_octocode__githubViewRepoStructure",
+      "mcp__plugin_crew_octocode__githubGetFileContent",
+      "mcp__plugin_crew_octocode__githubSearchCode",
+      "Bash(bun run lint:*)",
+      "Bash(bun remove:*)"
     ]
   }
 }

@@ -20,7 +20,7 @@ export async function encryptWithSerial(
   // Import key for AES-GCM
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
+    key as unknown as BufferSource,
     { name: "AES-GCM" },
     false,
     ["encrypt"]
@@ -68,7 +68,7 @@ export async function decryptWithSerial(
     // Import key for AES-GCM
     const cryptoKey = await crypto.subtle.importKey(
       "raw",
-      key,
+      key as unknown as BufferSource,
       { name: "AES-GCM" },
       false,
       ["decrypt"]

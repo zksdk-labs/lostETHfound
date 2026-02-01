@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider, createConfig, http } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { metaMask } from "wagmi/connectors";
 import { hardhat, sepolia } from "wagmi/chains";
 import { useState } from "react";
 
@@ -13,7 +13,13 @@ const sepoliaRpc =
 
 const config = createConfig({
   chains: [sepolia, hardhat],
-  connectors: [injected()],
+  connectors: [
+    metaMask({
+      dappMetadata: {
+        name: "LostETHFound",
+      },
+    }),
+  ],
   transports: {
     [sepolia.id]: http(sepoliaRpc),
     [hardhat.id]: http("http://127.0.0.1:8545"),
@@ -25,7 +31,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (
-    <WagmiProvider config={config}>
+    <WagmiProvider config={config} reconnectOnMount={false}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WagmiProvider>
   );

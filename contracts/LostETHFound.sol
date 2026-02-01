@@ -12,6 +12,7 @@ contract LostETHFound is ERC721 {
     enum Status {
         Active,
         Lost,
+        Found,
         Returned
     }
 
@@ -69,6 +70,10 @@ contract LostETHFound is ERC721 {
         uint256 reward
     );
 
+    event BountyActivated(uint256 indexed tokenId, uint256 amount);
+    event FoundPending(uint256 indexed tokenId, address finder);
+    event ReturnConfirmed(uint256 indexed tokenId, address finder, uint256 reward);
+
     constructor(address verifierAddress, address questionVerifierAddress) ERC721("LostETHFound Ownership", "LOST") {
         require(verifierAddress != address(0), "verifier required");
         verifier = IVerifier(verifierAddress);
@@ -76,9 +81,82 @@ contract LostETHFound is ERC721 {
         questionVerifier = IQuestionVerifier(questionVerifierAddress);
     }
 
-    // ============ TAGGED FLOW ============
+    // ============ MAIN FLOW: Return Code + Questions ============
 
-    /// @notice Register a tagged item (has secret code)
+    /// @notice Register item with return code (for lookup) + questions (for proof)
+    /// @dev This is the default flow per the protocol spec
+    function registerItem(
+        bytes32 commitment,
+        bytes32 categoryId,
+        bytes32[] calldata answerHashes,
+        uint8 threshold,
+        bytes calldata encryptedContact
+    ) external payable returns (uint256 tokenId) {
+        require(commitment != bytes32(0), "commitment required");
+        require(byCommitment[commitment] == 0, "already registered");
+        require(answerHashes.length == 5, "need 5 answer hashes");
+        require(threshold > 0 && threshold <= 5, "threshold 1-5");
+
+        tokenId = ++_nextTokenId;
+        _mint(msg.sender, tokenId);
+
+        items[tokenId] = Item({
+            commitment: commitment,
+            categoryId: categoryId,
+            answerHashes: answerHashes,
+            threshold: threshold,
+            reward: msg.value,
+            status: Status.Active,
+            finder: address(0),
+            isTagged: true,
+            encryptedContact: encryptedContact
+        });
+
+        byCommitment[commitment] = tokenId;
+
+        emit ItemRegistered(tokenId, msg.sender, commitment, categoryId, msg.value, true);
+    }
+
+    /// @notice Finder claims item: looks up by commitment, proves with questions
+    function claimItem(
+        bytes32 commitment,
+        uint256[2] calldata pA,
+        uint256[2][2] calldata pB,
+        uint256[2] calldata pC,
+        uint256[8] calldata publicSignals // valid, answerHashes[5], threshold, packId
+    ) external {
+        require(address(questionVerifier) != address(0), "question verifier not set");
+
+        uint256 tokenId = byCommitment[commitment];
+        require(tokenId != 0, "not registered");
+
+        Item storage item = items[tokenId];
+        require(item.status == Status.Lost, "not lost");
+
+        // Verify the proof
+        bool ok = questionVerifier.verifyProof(pA, pB, pC, publicSignals);
+        require(ok, "invalid proof");
+
+        // Check that valid == 1 (threshold met)
+        require(publicSignals[0] == 1, "threshold not met");
+
+        // Verify proof matches THIS item's answer hashes
+        require(item.answerHashes.length == 5, "invalid answer count");
+        for (uint256 i = 0; i < 5; i++) {
+            require(publicSignals[i + 1] == uint256(item.answerHashes[i]), "answer hash mismatch");
+        }
+        require(publicSignals[6] == item.threshold, "threshold mismatch");
+
+        item.status = Status.Found;
+        item.finder = msg.sender;
+
+        emit FoundPending(tokenId, msg.sender);
+        emit ItemStatusChanged(tokenId, Status.Found);
+    }
+
+    // ============ LEGACY: Tagged-only flow (kept for backwards compatibility) ============
+
+    /// @notice Register a tagged item (has secret code, NO questions)
     function registerTagged(bytes32 commitment, bytes32 categoryId, bytes calldata encryptedContact)
         external
         payable
@@ -107,7 +185,7 @@ contract LostETHFound is ERC721 {
         emit ItemRegistered(tokenId, msg.sender, commitment, categoryId, msg.value, true);
     }
 
-    /// @notice Finder claims a tagged item with ZK proof
+    /// @notice Finder claims a tagged item with ZK proof (legacy - proves knowledge of secret)
     function claimTagged(
         bytes32 commitment,
         bytes32 nullifier,
@@ -120,7 +198,7 @@ contract LostETHFound is ERC721 {
         require(tokenId != 0, "not registered");
 
         Item storage item = items[tokenId];
-        require(item.status != Status.Returned, "already returned");
+        require(item.status == Status.Lost, "not lost");
         require(!nullifierUsed[nullifier], "already claimed");
 
         // Verify public signals match
@@ -132,28 +210,17 @@ contract LostETHFound is ERC721 {
         require(ok, "invalid proof");
 
         nullifierUsed[nullifier] = true;
-        item.status = Status.Returned;
+        item.status = Status.Found;
         item.finder = msg.sender;
 
-        // Send reward
-        uint256 reward = item.reward;
-        item.reward = 0;
-
-        // Mint Good Samaritan badge to finder
-        uint256 badgeId = _mintBadge(msg.sender, tokenId, item.categoryId, reward);
-
-        if (reward > 0) {
-            (bool sent,) = msg.sender.call{value: reward}("");
-            require(sent, "reward transfer failed");
-        }
-
-        emit ItemClaimed(tokenId, msg.sender, reward, badgeId);
-        emit ItemStatusChanged(tokenId, Status.Returned);
+        // Reward is NOT paid yet - owner must confirm return first
+        emit FoundPending(tokenId, msg.sender);
+        emit ItemStatusChanged(tokenId, Status.Found);
     }
 
-    // ============ UNTAGGED FLOW ============
+    // ============ LEGACY: Untagged flow (question-only, no return code) ============
 
-    /// @notice Register an untagged item (question-based)
+    /// @notice Register an untagged item (question-based, no return code)
     function registerUntagged(
         bytes32 packId,
         bytes32 categoryId,
@@ -201,7 +268,7 @@ contract LostETHFound is ERC721 {
         require(tokenId != 0, "pack not found");
 
         Item storage item = items[tokenId];
-        require(item.status != Status.Returned, "already returned");
+        require(item.status == Status.Lost, "not lost");
 
         // Verify the proof
         bool ok = questionVerifier.verifyProof(pA, pB, pC, publicSignals);
@@ -218,22 +285,12 @@ contract LostETHFound is ERC721 {
         require(publicSignals[6] == item.threshold, "threshold mismatch");
         require(publicSignals[7] == uint256(packId), "packId mismatch");
 
-        item.status = Status.Returned;
+        item.status = Status.Found;
         item.finder = msg.sender;
 
-        uint256 reward = item.reward;
-        item.reward = 0;
-
-        // Mint Good Samaritan badge to finder
-        uint256 badgeId = _mintBadge(msg.sender, tokenId, item.categoryId, reward);
-
-        if (reward > 0) {
-            (bool sent,) = msg.sender.call{value: reward}("");
-            require(sent, "reward transfer failed");
-        }
-
-        emit ItemClaimed(tokenId, msg.sender, reward, badgeId);
-        emit ItemStatusChanged(tokenId, Status.Returned);
+        // Reward is NOT paid yet - owner must confirm return first
+        emit FoundPending(tokenId, msg.sender);
+        emit ItemStatusChanged(tokenId, Status.Found);
     }
 
     // ============ STATUS MANAGEMENT ============
@@ -281,6 +338,46 @@ contract LostETHFound is ERC721 {
 
         (bool sent,) = msg.sender.call{value: reward}("");
         require(sent, "withdraw failed");
+    }
+
+    /// @notice Owner activates bounty by adding ETH escrow
+    function activateBounty(uint256 tokenId) external payable {
+        require(ownerOf(tokenId) == msg.sender, "not owner");
+        require(!isBadge[tokenId], "badges cannot have bounty");
+        require(items[tokenId].status == Status.Lost, "not lost");
+        require(msg.value > 0, "no bounty sent");
+
+        items[tokenId].reward += msg.value;
+
+        emit BountyActivated(tokenId, msg.value);
+    }
+
+    /// @notice Owner confirms return after finder claims
+    function confirmReturn(uint256 tokenId) external {
+        require(ownerOf(tokenId) == msg.sender, "not owner");
+        require(!isBadge[tokenId], "badges cannot be returned");
+
+        Item storage item = items[tokenId];
+        require(item.status == Status.Found, "not found");
+        require(item.finder != address(0), "no finder");
+
+        address finder = item.finder;
+        uint256 reward = item.reward;
+        item.reward = 0;
+        item.status = Status.Returned;
+
+        // Mint Good Samaritan badge to finder
+        uint256 badgeId = _mintBadge(finder, tokenId, item.categoryId, reward);
+
+        // Pay reward to finder
+        if (reward > 0) {
+            (bool sent,) = finder.call{value: reward}("");
+            require(sent, "reward transfer failed");
+        }
+
+        emit ReturnConfirmed(tokenId, finder, reward);
+        emit ItemClaimed(tokenId, finder, reward, badgeId);
+        emit ItemStatusChanged(tokenId, Status.Returned);
     }
 
     // ============ VIEW FUNCTIONS ============
@@ -343,12 +440,16 @@ contract LostETHFound is ERC721 {
     function _itemURI(uint256 tokenId) internal view returns (string memory) {
         Item storage item = items[tokenId];
 
-        string memory statusStr =
-            item.status == Status.Active ? "Active" : item.status == Status.Lost ? "Lost" : "Returned";
+        string memory statusStr = item.status == Status.Active
+            ? "Active"
+            : item.status == Status.Lost ? "Lost" : item.status == Status.Found ? "Found" : "Returned";
         string memory typeStr = item.isTagged ? "Tagged" : "Question-Based";
         string memory rewardStr = _formatEther(item.reward);
 
-        string memory svg = _generateItemSVG(tokenId, statusStr, typeStr, rewardStr);
+        // Return ID hash: commitment for tagged items, "Question-Based" text for untagged
+        string memory returnIdStr = item.isTagged ? _truncateHash(item.commitment) : "N/A";
+
+        string memory svg = _generateItemSVG(tokenId, statusStr, typeStr, rewardStr, returnIdStr);
 
         string memory json = string(
             abi.encodePacked(
@@ -403,37 +504,43 @@ contract LostETHFound is ERC721 {
         return string(abi.encodePacked("data:application/json;base64,", Base64.encode(bytes(json))));
     }
 
-    function _generateItemSVG(uint256 tokenId, string memory status, string memory itemType, string memory reward)
-        internal
-        pure
-        returns (string memory)
-    {
+    function _generateItemSVG(
+        uint256 tokenId,
+        string memory status,
+        string memory itemType,
+        string memory reward,
+        string memory returnId
+    ) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">',
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 450">',
                 '<defs><linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">',
                 '<stop offset="0%" style="stop-color:#1a1a2e"/>',
                 '<stop offset="100%" style="stop-color:#16213e"/>',
                 "</linearGradient></defs>",
-                '<rect width="400" height="400" fill="url(#bg)"/>',
-                '<text x="200" y="60" text-anchor="middle" fill="#f0f0f0" font-family="sans-serif" font-size="24" font-weight="bold">Ownership Proof</text>',
-                '<text x="200" y="100" text-anchor="middle" fill="#888" font-family="monospace" font-size="14">#',
+                '<rect width="400" height="450" fill="url(#bg)"/>',
+                '<text x="200" y="50" text-anchor="middle" fill="#f0f0f0" font-family="sans-serif" font-size="24" font-weight="bold">Ownership Proof</text>',
+                '<text x="200" y="85" text-anchor="middle" fill="#888" font-family="monospace" font-size="14">#',
                 tokenId.toString(),
                 "</text>",
-                '<rect x="50" y="140" width="300" height="200" rx="20" fill="#252550" stroke="#4a4a8a" stroke-width="2"/>',
-                '<text x="70" y="180" fill="#aaa" font-family="sans-serif" font-size="12">STATUS</text>',
-                '<text x="70" y="205" fill="#f0f0f0" font-family="sans-serif" font-size="18">',
+                '<rect x="50" y="110" width="300" height="280" rx="20" fill="#252550" stroke="#4a4a8a" stroke-width="2"/>',
+                '<text x="70" y="150" fill="#aaa" font-family="sans-serif" font-size="12">STATUS</text>',
+                '<text x="70" y="175" fill="#f0f0f0" font-family="sans-serif" font-size="18">',
                 status,
                 "</text>",
-                '<text x="70" y="250" fill="#aaa" font-family="sans-serif" font-size="12">TYPE</text>',
-                '<text x="70" y="275" fill="#f0f0f0" font-family="sans-serif" font-size="18">',
+                '<text x="70" y="215" fill="#aaa" font-family="sans-serif" font-size="12">TYPE</text>',
+                '<text x="70" y="240" fill="#f0f0f0" font-family="sans-serif" font-size="18">',
                 itemType,
                 "</text>",
-                '<text x="70" y="320" fill="#aaa" font-family="sans-serif" font-size="12">BOUNTY</text>',
-                '<text x="70" y="345" fill="#00d4aa" font-family="sans-serif" font-size="18">',
+                '<text x="70" y="280" fill="#aaa" font-family="sans-serif" font-size="12">BOUNTY</text>',
+                '<text x="70" y="305" fill="#00d4aa" font-family="sans-serif" font-size="18">',
                 reward,
                 " ETH</text>",
-                '<text x="200" y="380" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="10">LostETHFound</text>',
+                '<text x="70" y="345" fill="#aaa" font-family="sans-serif" font-size="12">RETURN ID</text>',
+                '<text x="70" y="370" fill="#f0f0f0" font-family="monospace" font-size="12">',
+                returnId,
+                "</text>",
+                '<text x="200" y="430" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="10">LostETHFound</text>',
                 "</svg>"
             )
         );
@@ -480,6 +587,36 @@ contract LostETHFound is ERC721 {
         }
 
         return string(abi.encodePacked(ethWhole.toString(), ".", ethFrac.toString()));
+    }
+
+    /// @notice Truncates a bytes32 hash for display: "0x2e8c...5f6f"
+    function _truncateHash(bytes32 hash) internal pure returns (string memory) {
+        bytes memory hashBytes = abi.encodePacked(hash);
+        bytes memory hexChars = "0123456789abcdef";
+
+        // Build "0x" + first 4 chars + "..." + last 4 chars
+        bytes memory result = new bytes(15); // 0x + 4 + ... + 4 = 15
+        result[0] = "0";
+        result[1] = "x";
+
+        // First 2 bytes (4 hex chars)
+        for (uint256 i = 0; i < 2; i++) {
+            result[2 + i * 2] = hexChars[uint8(hashBytes[i]) >> 4];
+            result[2 + i * 2 + 1] = hexChars[uint8(hashBytes[i]) & 0x0f];
+        }
+
+        // Ellipsis
+        result[6] = ".";
+        result[7] = ".";
+        result[8] = ".";
+
+        // Last 2 bytes (4 hex chars)
+        for (uint256 i = 0; i < 2; i++) {
+            result[9 + i * 2] = hexChars[uint8(hashBytes[30 + i]) >> 4];
+            result[9 + i * 2 + 1] = hexChars[uint8(hashBytes[30 + i]) & 0x0f];
+        }
+
+        return string(result);
     }
 
     // ============ INTERNAL ============
